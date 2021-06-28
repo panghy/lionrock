@@ -72,8 +72,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           tag("name", request.getName());
     }
     if (logger.isDebugEnabled()) {
-      logger.debug("Executing DatabaseRequest from: " + request.getClientIdentifier() + " on database: " +
-          request.getDatabaseName() + " named: " + request.getName());
+      String msg = "Executing DatabaseRequest from: " + request.getClientIdentifier() + " on database: " +
+              request.getDatabaseName() + " named: " + request.getName();
+      logger.debug(msg);
+      if (overallSpan != null) {
+        overallSpan.event(msg);
+      }
     }
     Database db = databaseMap.get(request.getDatabaseName());
     if (db == null) {
@@ -89,7 +93,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         overallSpan.tag("request", "get_value");
       }
       if (logger.isDebugEnabled()) {
-        logger.debug("GetValueRequest on: " + printable(request.getGetValue().getKey().toByteArray()));
+        String msg = "GetValueRequest on: " + printable(request.getGetValue().getKey().toByteArray());
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
       }
       handleException(db.runAsync(tx -> {
         setTransactionDeadline(rpcContext, tx);
@@ -98,9 +106,13 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         try (Tracer.SpanInScope ignored2 = tracer.withSpan(overallSpan)) {
           GetValueResponse.Builder build = GetValueResponse.newBuilder();
           if (logger.isDebugEnabled()) {
-            logger.debug("GetValueRequest on: " +
-                printable(request.getGetValue().getKey().toByteArray()) + " is: " +
-                printable(val));
+            String msg = "GetValueRequest on: " +
+                    printable(request.getGetValue().getKey().toByteArray()) + " is: " +
+                    printable(val);
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           if (val != null) {
             build.setValue(ByteString.copyFrom(val));
@@ -116,8 +128,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         overallSpan.tag("request", "set_value");
       }
       if (logger.isDebugEnabled()) {
-        logger.debug("SetValueRequest on: " + printable(request.getSetValue().getKey().toByteArray()) + " => " +
-            printable(request.getSetValue().getValue().toByteArray()));
+        String msg = "SetValueRequest on: " + printable(request.getSetValue().getKey().toByteArray()) + " => " +
+                printable(request.getSetValue().getValue().toByteArray());
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
       }
       handleCommittedTransaction(
           handleException(
@@ -132,7 +148,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         overallSpan.tag("request", "clear_key");
       }
       if (logger.isDebugEnabled()) {
-        logger.debug("ClearKeyRequest on: " + printable(request.getClearKey().getKey().toByteArray()));
+        String msg = "ClearKeyRequest on: " + printable(request.getClearKey().getKey().toByteArray());
+        overallSpan.event(msg);
+        logger.debug(msg);
       }
       handleCommittedTransaction(
           handleException(
@@ -147,8 +165,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         overallSpan.tag("request", "clear_range");
       }
       if (logger.isDebugEnabled()) {
-        logger.debug("ClearRangeRequest on: " + printable(request.getClearRange().getStart().toByteArray()) + " => " +
-            printable(request.getClearRange().getEnd().toByteArray()));
+        String msg = "ClearRangeRequest on: " + printable(request.getClearRange().getStart().toByteArray()) + " => " +
+                printable(request.getClearRange().getEnd().toByteArray());
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
       }
       handleCommittedTransaction(
           handleException(
@@ -179,20 +201,24 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           StartTransactionRequest startRequest = this.startRequest.updateAndGet(startTransactionRequest -> {
             if (startTransactionRequest != null) {
               StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
-                  withDescription("cannot send StartTransactionRequest twice").
-                  asRuntimeException();
+                      withDescription("cannot send StartTransactionRequest twice").
+                      asRuntimeException();
               responseObserver.onError(toThrow);
               throw toThrow;
             }
             return value.getStartTransaction();
           });
-          logger.debug("Starting transaction " + startRequest.getName() + " against db: " +
-              startRequest.getDatabaseName());
+          if (logger.isDebugEnabled()) {
+            String msg = "Starting transaction " + startRequest.getName() + " against db: " +
+                    startRequest.getDatabaseName();
+            logger.debug(msg);
+            overallSpan.event(msg);
+          }
           Database db = databaseMap.get(startRequest.getDatabaseName());
           if (db == null) {
             StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
-                withDescription("cannot find database named: " + startRequest.getDatabaseName()).
-                asRuntimeException();
+                    withDescription("cannot find database named: " + startRequest.getDatabaseName()).
+                    asRuntimeException();
             responseObserver.onError(toThrow);
             throw toThrow;
           }
@@ -204,12 +230,15 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 tag("name", startRequest.getName());
           }
         } else if (value.hasCommitTransaction()) {
-          logger.debug("CommitTransactionRequest");
+          if (logger.isDebugEnabled()) {
+            overallSpan.event("CommitTransactionRequest");
+            logger.debug("CommitTransactionRequest");
+          }
           hasActiveTransactionOrThrow();
           if (commitStarted.getAndSet(true)) {
             StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
-                withDescription("transaction already committed").
-                asRuntimeException();
+                    withDescription("transaction already committed").
+                    asRuntimeException();
             responseObserver.onError(toThrow);
             throw toThrow;
           }
@@ -226,7 +255,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                           setCommitTransaction(CommitTransactionResponse.newBuilder().
                                   setCommittedVersion(tx.getCommittedVersion()).build()).build());
                   if (logger.isDebugEnabled()) {
-                    logger.debug("Committed transaction: " + tx.getCommittedVersion());
+                    String msg = "Committed transaction: " + tx.getCommittedVersion();
+                    opSpan.event(msg);
+                    logger.debug(msg);
                   }
                 }
               }).whenComplete((unused, throwable) -> {
@@ -235,7 +266,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           });
         } else if (value.hasGetValue()) {
           if (logger.isDebugEnabled()) {
-            logger.debug("GetValueRequest on: " + printable(value.getGetValue().getKey().toByteArray()));
+            String msg = "GetValueRequest on: " + printable(value.getGetValue().getKey().toByteArray());
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+            logger.debug(msg);
           }
           hasActiveTransactionOrThrow();
           // start the span/scope for the get_value call.
@@ -258,9 +293,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                     build());
               } else {
                 if (logger.isDebugEnabled()) {
-                  logger.debug("GetValueRequest on: " +
-                      printable(value.getGetValue().getKey().toByteArray()) + " is: " +
-                      printable(val));
+                  String msg = "GetValueRequest on: " +
+                          printable(value.getGetValue().getKey().toByteArray()) + " is: " +
+                          printable(val);
+                  logger.debug(msg);
+                  opSpan.event(msg);
                 }
                 GetValueResponse.Builder build = GetValueResponse.newBuilder().
                     setSequenceId(value.getGetValue().getSequenceId());
@@ -279,25 +316,31 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         } else if (value.hasSetValue()) {
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
-            logger.debug("SetValueRequest for: " +
-                printable(value.getSetValue().getKey().toByteArray()) + " => " +
-                printable(value.getSetValue().getValue().toByteArray()));
+            String msg = "SetValueRequest for: " +
+                    printable(value.getSetValue().getKey().toByteArray()) + " => " +
+                    printable(value.getSetValue().getValue().toByteArray());
+            logger.debug(msg);
+            overallSpan.event(msg);
           }
           tx.set(value.getSetValue().getKey().toByteArray(),
               value.getSetValue().getValue().toByteArray());
         } else if (value.hasClearKey()) {
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
-            logger.debug("ClearKeyRequest for: " +
-                printable(value.getClearKey().getKey().toByteArray()));
+            String msg = "ClearKeyRequest for: " +
+                    printable(value.getClearKey().getKey().toByteArray());
+            logger.debug(msg);
+            overallSpan.event(msg);
           }
           tx.clear(value.getClearKey().getKey().toByteArray());
         } else if (value.hasClearRange()) {
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
-            logger.debug("ClearKeyRangeRequest for: " +
-                printable(value.getClearRange().getStart().toByteArray()) + " => " +
-                printable(value.getClearRange().getEnd().toByteArray()));
+            String msg = "ClearKeyRangeRequest for: " +
+                    printable(value.getClearRange().getStart().toByteArray()) + " => " +
+                    printable(value.getClearRange().getEnd().toByteArray());
+            logger.debug(msg);
+            overallSpan.event(msg);
           }
           tx.clear(value.getClearRange().getStart().toByteArray(),
               value.getClearRange().getEnd().toByteArray());
@@ -377,6 +420,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       exceptionMetadata.put(Metadata.Key.of("fdb_error_message", Metadata.ASCII_STRING_MARSHALLER),
           throwable.getMessage());
     }
+    span.event(failureMessage.get());
     logger.warn(failureMessage.get(), throwable);
     span.error(throwable);
     return exceptionMetadata;
