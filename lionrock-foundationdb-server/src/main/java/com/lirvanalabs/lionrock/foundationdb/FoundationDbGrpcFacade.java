@@ -221,11 +221,13 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
           handleException(tx.commit(), opSpan, responseObserver, "failed to commit transaction").
               thenAccept(x -> {
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setCommitTransaction(CommitTransactionResponse.newBuilder().
-                        setCommittedVersion(tx.getCommittedVersion()).build()).build());
-                if (logger.isDebugEnabled()) {
-                  logger.debug("Committed transaction: " + tx.getCommittedVersion());
+                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setCommitTransaction(CommitTransactionResponse.newBuilder().
+                                  setCommittedVersion(tx.getCommittedVersion()).build()).build());
+                  if (logger.isDebugEnabled()) {
+                    logger.debug("Committed transaction: " + tx.getCommittedVersion());
+                  }
                 }
               }).whenComplete((unused, throwable) -> {
             opScope.close();
