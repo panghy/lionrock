@@ -11,6 +11,7 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.lognet.springboot.grpc.GRpcServerRunner;
 import org.lognet.springboot.grpc.autoconfigure.GRpcServerProperties;
@@ -31,7 +32,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE;
 
 @SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=-1"})
-class FoundationDbGrpcFacadeTests {
+class BidirectionalStreamingTests {
 
   @Autowired(required = false)
   @Qualifier("grpcServerRunner")
@@ -193,6 +194,16 @@ class FoundationDbGrpcFacadeTests {
     assertEquals("future", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
   }
 
+  /**
+   * Test is flaky, FDB does allow commit on a transaction that's older than 5s.
+   *
+   * <code>
+   * 2021-06-27 20:39:34.628 DEBUG [fdb-facade,b0cd6877ed1bc713,fe7fab461c7133e8] 51551 --- [     fdb-java-2] c.l.l.f.FoundationDbGrpcFacade           : GetValueRequest on: dummy is: dummy
+   * 2021-06-27 20:39:40.641 DEBUG [fdb-facade,b0cd6877ed1bc713,b0cd6877ed1bc713] 51551 --- [ault-executor-2] c.l.l.f.FoundationDbGrpcFacade           : SetValueRequest for: dummy => dummy
+   * 2021-06-27 20:39:40.642 DEBUG [fdb-facade,b0cd6877ed1bc713,b0cd6877ed1bc713] 51551 --- [ault-executor-2] c.l.l.f.FoundationDbGrpcFacade           : CommitTransactionRequest
+   * </code>
+   */
+  @Disabled
   @Test
   void testReadAndTimeout() throws InterruptedException {
     TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
@@ -214,8 +225,10 @@ class FoundationDbGrpcFacadeTests {
         setGetValue(GetValueRequest.newBuilder().
             setKey(ByteString.copyFrom("dummy".getBytes(StandardCharsets.UTF_8))).build()).
         build());
+    // wait for the read callback.
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
 
-    // sleep for 5s.
+    // sleep for 6s.
     Thread.sleep(6000);
 
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().
@@ -246,6 +259,30 @@ class FoundationDbGrpcFacadeTests {
 
     clearKeyAndCommit(stub, helloB);
     assertNull(getValue(stub, helloB));
+  }
+
+  @Test
+  void testClearRange() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = "world".getBytes(StandardCharsets.UTF_8);
+    setKeyAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8), worldB);
+    setKeyAndCommit(stub, "hello1".getBytes(StandardCharsets.UTF_8), worldB);
+    setKeyAndCommit(stub, "hello2".getBytes(StandardCharsets.UTF_8), worldB);
+    setKeyAndCommit(stub, "hello3".getBytes(StandardCharsets.UTF_8), worldB);
+    assertEquals("world", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
+    assertEquals("world", getValue(stub, "hello2".getBytes(StandardCharsets.UTF_8)));
+    assertEquals("world", getValue(stub, "hello3".getBytes(StandardCharsets.UTF_8)));
+
+    // end is exclusive. (should not delete hello).
+    clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
+        "hello3".getBytes(StandardCharsets.UTF_8));
+
+    assertNull(getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
+    assertNull(getValue(stub, "hello1".getBytes(StandardCharsets.UTF_8)));
+    assertNull(getValue(stub, "hello2".getBytes(StandardCharsets.UTF_8)));
+    assertEquals("world", getValue(stub, "hello3".getBytes(StandardCharsets.UTF_8)));
   }
 
   private long setKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
@@ -300,6 +337,41 @@ class FoundationDbGrpcFacadeTests {
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().
         setClearKey(ClearKeyRequest.newBuilder().
             setKey(ByteString.copyFrom(key)).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    response = streamingDatabaseResponseCapture.getValue();
+    assertTrue(response.hasCommitTransaction());
+
+    return response.getCommitTransaction().getCommittedVersion();
+  }
+
+  private long clearRangeAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                   byte[] start, byte[] end) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamingDatabaseResponse response;
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("setKeyAndCommit").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setClearRange(ClearKeyRangeRequest.newBuilder().
+            setStart(ByteString.copyFrom(start)).
+            setEnd(ByteString.copyFrom(end)).
             build()).
         build());
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().

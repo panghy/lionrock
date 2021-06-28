@@ -22,6 +22,7 @@ message DatabaseRequest {
     GetValueRequest get_value = 4;
     SetValueRequest set_value = 5;
     ClearKeyRequest clear_key = 6;
+    ClearKeyRangeRequest clear_range = 7;
   }
 }
 
@@ -30,6 +31,7 @@ message DatabaseResponse {
   // The response from the original request.
   oneof response {
     GetValueResponse get_value = 1;
+    CommitTransactionResponse committed_transaction = 2;
   }
 }
 
@@ -41,6 +43,7 @@ message StreamingDatabaseRequest {
     GetValueRequest get_value = 3;
     SetValueRequest set_value = 4;
     ClearKeyRequest clear_key = 5;
+    ClearKeyRangeRequest clear_range = 6;
   }
 }
 
@@ -98,6 +101,14 @@ message SetValueRequest {
 // The request to delete a key.
 message ClearKeyRequest {
   bytes key = 1;
+}
+
+// The request to delete a range of keys.
+message ClearKeyRangeRequest {
+  // start key inclusive
+  bytes start = 1;
+  // end key exclusive
+  bytes end = 2;
 }
 
 // The response that's streamed back when a single async operation fails.

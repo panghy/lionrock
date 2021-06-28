@@ -24,16 +24,21 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 
 @SpringBootApplication
 @GRpcService
 @Component
 public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreImplBase {
+
+  static final CompletableFuture<?> DONE = completedFuture(null);
 
   Logger logger = LoggerFactory.getLogger(FoundationDbGrpcFacade.class);
 
@@ -72,62 +77,95 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     }
     Database db = databaseMap.get(request.getDatabaseName());
     if (db == null) {
-      throw Status.INVALID_ARGUMENT.
+      StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
           withDescription("cannot find database named: " + request.getDatabaseName()).
           asRuntimeException();
+      responseObserver.onError(toThrow);
+      throw toThrow;
     }
-    // execute the transaction.
-    db.run(tx -> {
-      setTransactionDeadline(tx);
-      if (request.hasGetValue()) {
+    Context rpcContext = Context.current();
+    if (request.hasGetValue()) {
+      if (overallSpan != null) {
         overallSpan.tag("request", "get_value");
-        if (logger.isDebugEnabled()) {
-          logger.debug("GetValueRequest on: " + printable(request.getGetValue().getKey().toByteArray()));
-        }
-        tx.get(request.getGetValue().getKey().toByteArray()).whenComplete((val, throwable) -> {
-          // create callbackSpan (ensures proper propagation).
-          Span callbackSpan = this.tracer.nextSpan(overallSpan).name("execute.get_value.callback");
-          try (Tracer.SpanInScope ignored2 = tracer.withSpan(callbackSpan.start())) {
-            if (throwable != null) {
-              Metadata exceptionMetadata = new Metadata();
-              if (throwable instanceof FDBException) {
-                exceptionMetadata.put(Metadata.Key.of("fdb_error_code", Metadata.ASCII_STRING_MARSHALLER),
-                    String.valueOf(((FDBException) throwable).getCode()));
-                exceptionMetadata.put(Metadata.Key.of("fdb_error_message", Metadata.ASCII_STRING_MARSHALLER),
-                    throwable.getMessage());
-              }
-              callbackSpan.error(throwable);
-              responseObserver.onError(Status.ABORTED.
-                  withCause(throwable).
-                  withDescription(throwable.getMessage()).
-                  asRuntimeException(exceptionMetadata));
-            } else {
-              GetValueResponse.Builder build = GetValueResponse.newBuilder();
-              if (logger.isDebugEnabled()) {
-                logger.debug("GetValueRequest on: " +
-                    printable(request.getGetValue().getKey().toByteArray()) + " is: " +
-                    printable(val));
-              }
-              if (val != null) {
-                build.setValue(ByteString.copyFrom(val));
-              }
-              responseObserver.onNext(DatabaseResponse.newBuilder().
-                  setGetValue(build.build()).
-                  build());
-              responseObserver.onCompleted();
-            }
-          } finally {
-            callbackSpan.end();
-          }
-        });
       }
-      return null;
-    });
+      if (logger.isDebugEnabled()) {
+        logger.debug("GetValueRequest on: " + printable(request.getGetValue().getKey().toByteArray()));
+      }
+      handleException(db.runAsync(tx -> {
+        setTransactionDeadline(rpcContext, tx);
+        return tx.get(request.getGetValue().getKey().toByteArray());
+      }), overallSpan, responseObserver, "failed to get key").thenAccept(val -> {
+        try (Tracer.SpanInScope ignored2 = tracer.withSpan(overallSpan)) {
+          GetValueResponse.Builder build = GetValueResponse.newBuilder();
+          if (logger.isDebugEnabled()) {
+            logger.debug("GetValueRequest on: " +
+                printable(request.getGetValue().getKey().toByteArray()) + " is: " +
+                printable(val));
+          }
+          if (val != null) {
+            build.setValue(ByteString.copyFrom(val));
+          }
+          responseObserver.onNext(DatabaseResponse.newBuilder().
+              setGetValue(build.build()).
+              build());
+          responseObserver.onCompleted();
+        }
+      });
+    } else if (request.hasSetValue()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "set_value");
+      }
+      if (logger.isDebugEnabled()) {
+        logger.debug("SetValueRequest on: " + printable(request.getSetValue().getKey().toByteArray()) + " => " +
+            printable(request.getSetValue().getValue().toByteArray()));
+      }
+      handleCommittedTransaction(
+          handleException(
+              db.runAsync(tx -> {
+                setTransactionDeadline(rpcContext, tx);
+                tx.set(request.getSetValue().getKey().toByteArray(), request.getSetValue().getValue().toByteArray());
+                return completedFuture(tx);
+              }), overallSpan, responseObserver, "failed to set key"),
+          responseObserver);
+    } else if (request.hasClearKey()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "clear_key");
+      }
+      if (logger.isDebugEnabled()) {
+        logger.debug("ClearKeyRequest on: " + printable(request.getClearKey().getKey().toByteArray()));
+      }
+      handleCommittedTransaction(
+          handleException(
+              db.runAsync(tx -> {
+                setTransactionDeadline(rpcContext, tx);
+                tx.clear(request.getClearKey().getKey().toByteArray());
+                return completedFuture(tx);
+              }), overallSpan, responseObserver, "failed to set key"),
+          responseObserver);
+    } else if (request.hasClearRange()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "clear_range");
+      }
+      if (logger.isDebugEnabled()) {
+        logger.debug("ClearRangeRequest on: " + printable(request.getClearRange().getStart().toByteArray()) + " => " +
+            printable(request.getClearRange().getEnd().toByteArray()));
+      }
+      handleCommittedTransaction(
+          handleException(
+              db.runAsync(tx -> {
+                setTransactionDeadline(rpcContext, tx);
+                tx.clear(request.getClearRange().getStart().toByteArray(),
+                    request.getClearRange().getEnd().toByteArray());
+                return completedFuture(tx);
+              }), overallSpan, responseObserver, "failed to set key"),
+          responseObserver);
+    }
   }
 
   @Override
   public StreamObserver<StreamingDatabaseRequest> executeTransaction(
       StreamObserver<StreamingDatabaseResponse> responseObserver) {
+    Context rpcContext = Context.current();
     Span overallSpan = this.tracer.currentSpan();
     return new StreamObserver<>() {
 
@@ -159,6 +197,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             throw toThrow;
           }
           tx = db.createTransaction();
+          setTransactionDeadline(rpcContext, tx);
           if (overallSpan != null) {
             overallSpan.tag("client", startRequest.getClientIdentifier()).
                 tag("database_name", startRequest.getDatabaseName()).
@@ -180,32 +219,17 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           // start the span and scope for the commit transaction call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.commit_transaction");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          tx.commit().handle((unused, throwable) -> {
-            Span callbackSpan = tracer.nextSpan(opSpan).name("execute_transaction.commit_transaction.callback");
-            try (Tracer.SpanInScope ignored = tracer.withSpan(callbackSpan.start())) {
-              if (throwable != null) {
-                Metadata exceptionMetadata = handleThrowable(opSpan, throwable);
-                StatusRuntimeException toThrow =
-                    Status.ABORTED.withCause(throwable).
-                        withDescription("failed to commit transaction").
-                        asRuntimeException(exceptionMetadata);
-                responseObserver.onError(toThrow);
-                logger.warn("failed to commit transaction", toThrow);
-              } else {
+          handleException(tx.commit(), opSpan, responseObserver, "failed to commit transaction").
+              thenAccept(x -> {
                 responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
                     setCommitTransaction(CommitTransactionResponse.newBuilder().
                         setCommittedVersion(tx.getCommittedVersion()).build()).build());
                 if (logger.isDebugEnabled()) {
                   logger.debug("Committed transaction: " + tx.getCommittedVersion());
                 }
-              }
-            } catch (Throwable t) {
-              handleThrowable(callbackSpan, t);
-            } finally {
-              opScope.close();
-              opSpan.end();
-            }
-            return null;
+              }).whenComplete((unused, throwable) -> {
+            opScope.close();
+            opSpan.end();
           });
         } else if (value.hasGetValue()) {
           if (logger.isDebugEnabled()) {
@@ -217,10 +241,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
           GetValueRequest getValueRequest = value.getGetValue();
           tx.get(getValueRequest.getKey().toByteArray()).whenComplete((val, throwable) -> {
-            Span callbackSpan = tracer.nextSpan(opSpan).name("execute_transaction.get_value.callback");
-            try (Tracer.SpanInScope ignored = tracer.withSpan(callbackSpan.start())) {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
               if (throwable != null) {
-                handleThrowable(opSpan, throwable);
+                handleThrowable(opSpan, throwable,
+                    () -> "failed to get value for key: " + printable(getValueRequest.getKey().toByteArray()));
                 OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
                     setSequenceId(value.getGetValue().getSequenceId()).
                     setMessage(throwable.getMessage());
@@ -245,12 +269,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                     setGetValue(build.build()).
                     build());
               }
-            } catch (Throwable t) {
-              handleThrowable(callbackSpan, t);
             } finally {
               opScope.close();
               opSpan.end();
-              callbackSpan.end();
             }
           });
         } else if (value.hasSetValue()) {
@@ -269,21 +290,16 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 printable(value.getClearKey().getKey().toByteArray()));
           }
           tx.clear(value.getClearKey().getKey().toByteArray());
+        } else if (value.hasClearRange()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            logger.debug("ClearKeyRangeRequest for: " +
+                printable(value.getClearRange().getStart().toByteArray()) + " => " +
+                printable(value.getClearRange().getEnd().toByteArray()));
+          }
+          tx.clear(value.getClearRange().getStart().toByteArray(),
+              value.getClearRange().getEnd().toByteArray());
         }
-      }
-
-      private Metadata handleThrowable(Span span, Throwable throwable) {
-        Metadata exceptionMetadata = new Metadata();
-        if (throwable instanceof FDBException) {
-          span.tag("fdb_error_code", String.valueOf(((FDBException) throwable).getCode())).
-              error(throwable);
-          exceptionMetadata.put(Metadata.Key.of("fdb_error_code", Metadata.ASCII_STRING_MARSHALLER),
-              String.valueOf(((FDBException) throwable).getCode()));
-          exceptionMetadata.put(Metadata.Key.of("fdb_error_message", Metadata.ASCII_STRING_MARSHALLER),
-              throwable.getMessage());
-        }
-        span.error(throwable);
-        return exceptionMetadata;
       }
 
       private void hasActiveTransactionOrThrow() {
@@ -326,9 +342,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     };
   }
 
-  private void setTransactionDeadline(Transaction tx) {
-    if (Context.current().getDeadline() != null) {
-      long value = Context.current().getDeadline().timeRemaining(TimeUnit.MILLISECONDS);
+  private void setTransactionDeadline(Context rpcContext, Transaction tx) {
+    if (rpcContext.getDeadline() != null) {
+      long value = rpcContext.getDeadline().timeRemaining(TimeUnit.MILLISECONDS);
       if (value <= 0) {
         throw Status.DEADLINE_EXCEEDED.asRuntimeException();
       }
@@ -336,6 +352,59 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     } else {
       tx.options().setTimeout(config.getDefaultFdbTimeoutMs());
     }
+  }
+
+  private void handleCommittedTransaction(CompletableFuture<Transaction> input,
+                                          StreamObserver<DatabaseResponse> responseObserver) {
+    input.thenAccept(x -> {
+      responseObserver.onNext(DatabaseResponse.newBuilder().
+          setCommittedTransaction(CommitTransactionResponse.newBuilder().build()).
+          build());
+      responseObserver.onCompleted();
+    });
+  }
+
+  private Metadata handleThrowable(Span span, Throwable throwable, Supplier<String> failureMessage) {
+    Metadata exceptionMetadata = new Metadata();
+    if (throwable instanceof FDBException) {
+      span.tag("fdb_error_code", String.valueOf(((FDBException) throwable).getCode())).
+          error(throwable);
+      span.tag("fdb_error_message", throwable.getMessage());
+      exceptionMetadata.put(Metadata.Key.of("fdb_error_code", Metadata.ASCII_STRING_MARSHALLER),
+          String.valueOf(((FDBException) throwable).getCode()));
+      exceptionMetadata.put(Metadata.Key.of("fdb_error_message", Metadata.ASCII_STRING_MARSHALLER),
+          throwable.getMessage());
+    }
+    logger.warn(failureMessage.get(), throwable);
+    span.error(throwable);
+    return exceptionMetadata;
+  }
+
+  private <T> CompletableFuture<T> handleException(CompletableFuture<T> input, Span overallSpan,
+                                                   StreamObserver<?> responseObserver,
+                                                   String failureMessage) {
+    return handleException(input, overallSpan, responseObserver, () -> failureMessage);
+  }
+
+  /**
+   * Handle exceptional cases for a {@link CompletableFuture} and emit an error to the {@link StreamObserver} as well
+   * as recording a span.
+   */
+  private <T> CompletableFuture<T> handleException(CompletableFuture<T> input, Span overallSpan,
+                                                   StreamObserver<?> responseObserver,
+                                                   Supplier<String> failureMessage) {
+    input.whenComplete((t, throwable) -> {
+      if (throwable != null) {
+        try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
+          Metadata exceptionMetadata = handleThrowable(overallSpan, throwable, failureMessage);
+          responseObserver.onError(Status.ABORTED.
+              withCause(throwable).
+              withDescription(throwable.getMessage()).
+              asRuntimeException(exceptionMetadata));
+        }
+      }
+    });
+    return input;
   }
 
   public static void main(String[] args) {
