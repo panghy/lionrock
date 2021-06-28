@@ -262,6 +262,13 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
           tx.set(value.getSetValue().getKey().toByteArray(),
               value.getSetValue().getValue().toByteArray());
+        } else if (value.hasClearKey()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            logger.debug("ClearKeyRequest for: " +
+                printable(value.getClearKey().getKey().toByteArray()));
+          }
+          tx.clear(value.getClearKey().getKey().toByteArray());
         }
       }
 

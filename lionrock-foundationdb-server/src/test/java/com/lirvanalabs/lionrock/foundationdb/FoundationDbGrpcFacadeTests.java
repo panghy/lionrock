@@ -26,8 +26,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE;
 
@@ -183,7 +182,7 @@ class FoundationDbGrpcFacadeTests {
         "world".getBytes(StandardCharsets.UTF_8));
 
     // read the key back.
-    assertEquals("world", getValue("hello".getBytes(StandardCharsets.UTF_8), stub));
+    assertEquals("world", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
 
     // set the value to something else.
     assertTrue(setKeyAndCommit(stub,
@@ -191,7 +190,7 @@ class FoundationDbGrpcFacadeTests {
         "future".getBytes(StandardCharsets.UTF_8)) > lastCommittedVersion);
 
     // read the key back.
-    assertEquals("future", getValue("hello".getBytes(StandardCharsets.UTF_8), stub));
+    assertEquals("future", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
   }
 
   @Test
@@ -235,6 +234,20 @@ class FoundationDbGrpcFacadeTests {
     assertEquals(Status.ABORTED.getCode(), value.getStatus().getCode());
   }
 
+  @Test
+  void testClearKey() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] helloB = "hello".getBytes(StandardCharsets.UTF_8);
+    byte[] worldB = "world".getBytes(StandardCharsets.UTF_8);
+    setKeyAndCommit(stub, helloB, worldB);
+    assertEquals("world", getValue(stub, helloB));
+
+    clearKeyAndCommit(stub, helloB);
+    assertNull(getValue(stub, helloB));
+  }
+
   private long setKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
                                byte[] key, byte[] value) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
@@ -270,7 +283,41 @@ class FoundationDbGrpcFacadeTests {
     return response.getCommitTransaction().getCommittedVersion();
   }
 
-  private String getValue(byte[] key, TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
+  private long clearKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                 byte[] key) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamingDatabaseResponse response;
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("setKeyAndCommit").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setClearKey(ClearKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    response = streamingDatabaseResponseCapture.getValue();
+    assertTrue(response.hasCommitTransaction());
+
+    return response.getCommitTransaction().getCommittedVersion();
+  }
+
+  private String getValue(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, byte[] key) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamingDatabaseResponse value;
@@ -295,6 +342,9 @@ class FoundationDbGrpcFacadeTests {
     value = streamingDatabaseResponseCapture.getValue();
     assertTrue(value.hasGetValue());
 
+    if (!value.getGetValue().hasValue()) {
+      return null;
+    }
     return value.getGetValue().getValue().toStringUtf8();
   }
 }

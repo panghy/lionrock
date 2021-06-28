@@ -21,6 +21,7 @@ message DatabaseRequest {
   oneof request {
     GetValueRequest get_value = 4;
     SetValueRequest set_value = 5;
+    ClearKeyRequest clear_key = 6;
   }
 }
 
@@ -39,6 +40,7 @@ message StreamingDatabaseRequest {
     CommitTransactionRequest commit_transaction = 2;
     GetValueRequest get_value = 3;
     SetValueRequest set_value = 4;
+    ClearKeyRequest clear_key = 5;
   }
 }
 
@@ -84,7 +86,7 @@ message GetValueRequest {
 // The response for the value to a key.
 message GetValueResponse {
   int64 sequence_id = 1;
-  bytes value = 2;
+  optional bytes value = 2;
 }
 
 // The request to get the value of a single key.
