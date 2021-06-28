@@ -1,0 +1,68 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.16'
+    }
+}
+
+plugins {
+    id "com.google.protobuf" version "0.8.16"
+    id 'java'
+}
+
+group 'com.lirvanalabs'
+version '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+    implementation 'com.google.protobuf:protobuf-java:3.17.3'
+    protobuf 'com.google.protobuf:protobuf-java:3.17.3'
+
+    implementation 'io.grpc:grpc-netty-shaded:1.38.0'
+    implementation 'io.grpc:grpc-protobuf:1.38.0'
+    implementation 'io.grpc:grpc-stub:1.38.0'
+    compileOnly 'org.apache.tomcat:annotations-api:6.0.53' // necessary for Java 9+
+}
+
+test {
+    useJUnitPlatform()
+}
+
+sourceSets {
+    main {
+        proto {
+            srcDir "../proto"
+        }
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.17.3'
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.38.1'
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+apply plugin: 'idea'
+
+clean {
+    delete protobuf.generatedFilesBaseDir
+}

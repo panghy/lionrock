@@ -1,0 +1,112 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+option java_package = "com.lirvanalabs.lionrock.proto";
+option java_multiple_files = true;
+
+// A transactional, key-value store as a gRPC service.
+service TransactionalKeyValueStore {
+  // Execute a transaction
+  rpc executeTransaction (stream StreamingDatabaseRequest) returns (stream StreamingDatabaseResponse);
+  // Execute a single database operation (with a transaction)
+  rpc execute(DatabaseRequest) returns (DatabaseResponse);
+}
+
+// The request message from a client to a database to execute a single operation.
+message DatabaseRequest {
+  string name = 1;
+  string client_identifier = 2;
+  string database_name = 3;
+
+  oneof request {
+    GetValueRequest get_value = 4;
+    SetValueRequest set_value = 5;
+  }
+}
+
+// The response message from the database.
+message DatabaseResponse {
+  // The response from the original request.
+  oneof response {
+    GetValueResponse get_value = 1;
+  }
+}
+
+// The request message from a client to a database when streaming.
+message StreamingDatabaseRequest {
+  oneof request {
+    StartTransactionRequest start_transaction = 1;
+    CommitTransactionRequest commit_transaction = 2;
+    GetValueRequest get_value = 3;
+    SetValueRequest set_value = 4;
+  }
+}
+
+// The response message from a client to a database when streaming.
+message StreamingDatabaseResponse {
+  oneof response {
+    EndTransactionResponse end_transaction = 1;
+    CommitTransactionResponse commit_transaction = 2;
+    OperationFailureResponse operation_failure = 3;
+    GetValueResponse get_value = 4;
+  }
+}
+
+// The request message to start a transaction.
+message StartTransactionRequest {
+  string name = 1;
+  string client_identifier = 2;
+  string database_name = 3;
+}
+
+// The request to commit the ongoing transaction.
+message CommitTransactionRequest {
+}
+
+// The response message when a transaction is successfully committed. Errors are handled via gRPC errors.
+message EndTransactionResponse {
+  string message = 1;
+  int32 code = 2;
+  int64 server_time_ms = 3;
+}
+
+// The last response of a transaction request. Indicates successfully committing the transaction.
+message CommitTransactionResponse {
+  int64 committed_version = 1;
+}
+
+// The request to get the value of a single key.
+message GetValueRequest {
+  int64 sequence_id = 1;
+  bytes key = 2;
+}
+
+// The response for the value to a key.
+message GetValueResponse {
+  int64 sequence_id = 1;
+  bytes value = 2;
+}
+
+// The request to get the value of a single key.
+message SetValueRequest {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+// The request to delete a key.
+message ClearKeyRequest {
+  bytes key = 1;
+}
+
+// The response that's streamed back when a single async operation fails.
+message OperationFailureResponse {
+  int64 sequence_id = 1;
+  int64 code = 2;
+  string message = 3;
+}
+
+// Key-Value Pair
+message KeyValue {
+  bytes key = 1;
+  bytes value = 2;
+}

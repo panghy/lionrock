@@ -1,0 +1,28 @@
+# Default configuration for "fdb" (on linux, /etc/foundationdb.cluster)
+lionrock:
+  foundationdb:
+    clusters:
+      # Default cluster
+      - name: fdb
+
+spring:
+  application:
+    name: fdb-facade
+
+# Control logging level (DEBUG for development purposes).
+logging:
+  level:
+    root: INFO
+    com.lirvanalabs.lionrock: DEBUG
+
+# Below are Wavefront reporting specific entries (need API-token and URL to really work).
+management:
+  endpoint:
+    wavefront:
+      # disable wavefront reporting by default.
+      enabled: false
+
+wavefront:
+  application:
+    name: lionrock
+    service: fdb-facade

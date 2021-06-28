@@ -1,0 +1,4 @@
+rootProject.name = 'lionrock'
+include 'lionrock-proto-java'
+include 'lionrock-foundationdb-server'
+
