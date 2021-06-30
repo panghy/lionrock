@@ -372,6 +372,26 @@ class UnaryOperationTests {
     ));
   }
 
+  @Test
+  public void testInvalidRangeGetWithExact() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    stub.execute(DatabaseRequest.newBuilder().
+        setDatabaseName("fdb").setName("testGetRange").setClientIdentifier("unit test").
+        setGetRange(GetRangeRequest.newBuilder().
+            setStartBytes(ByteString.EMPTY).
+            setEndBytes(ByteString.EMPTY).
+            setStreamingMode(StreamingMode.EXACT).
+            build()).
+        build(), streamObs);
+
+    verify(streamObs, never()).onNext(databaseResponseCapture.capture());
+    verify(streamObs, never()).onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onError(any());
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));

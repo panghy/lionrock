@@ -508,14 +508,14 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               @Override
               public void accept(Boolean hasNext, Throwable throwable) {
                 try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
-                  boolean done = !hasNext;
+                  boolean done = false;
                   if (throwable != null) {
                     handleThrowable(opSpan, throwable,
                         () -> "failed to get range for start: " + start + " end: " + end +
                             " reverse: " + req.getReverse() + " limit: " + req.getLimit() +
                             " mode: " + req.getStreamingMode());
                     OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                        setSequenceId(value.getGetValue().getSequenceId()).
+                        setSequenceId(value.getGetRange().getSequenceId()).
                         setMessage(throwable.getMessage());
                     if (throwable instanceof FDBException) {
                       builder.setCode(((FDBException) throwable).getCode());
@@ -527,7 +527,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                         setOperationFailure(builder.build()).
                         build());
                     return;
-                  } else if (hasNext) {
+                  } else if (!hasNext) {
+                    // no more rows to read, flush the last message.
+                    done = true;
+                  } else {
                     // spool everything until the onHasNext CompletableFuture is pending.
                     while (iterator.onHasNext().isDone() &&
                         !iterator.onHasNext().isCompletedExceptionally()) {
