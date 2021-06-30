@@ -24,6 +24,7 @@ import org.springframework.core.io.Resource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -138,11 +139,8 @@ class UnaryOperationTests {
     TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
         TransactionalKeyValueStoreGrpc.newStub(channel);
 
-    byte[] worldB = "world".getBytes(StandardCharsets.UTF_8);
-    setKeyAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8), worldB);
-    setKeyAndCommit(stub, "hello1".getBytes(StandardCharsets.UTF_8), worldB);
-    setKeyAndCommit(stub, "hello2".getBytes(StandardCharsets.UTF_8), worldB);
-    setKeyAndCommit(stub, "hello3".getBytes(StandardCharsets.UTF_8), worldB);
+    setupRangeTest(stub);
+
     assertEquals("world", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
     assertEquals("world", getValue(stub, "hello2".getBytes(StandardCharsets.UTF_8)));
     assertEquals("world", getValue(stub, "hello3".getBytes(StandardCharsets.UTF_8)));
@@ -155,6 +153,264 @@ class UnaryOperationTests {
     assertNull(getValue(stub, "hello1".getBytes(StandardCharsets.UTF_8)));
     assertNull(getValue(stub, "hello2".getBytes(StandardCharsets.UTF_8)));
     assertEquals("world", getValue(stub, "hello3".getBytes(StandardCharsets.UTF_8)));
+  }
+
+  @Test
+  public void testGetRange_explicitStartEnd() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // firstAfterHello
+    List<KeyValue> results = getRange(stub, equals("hello".getBytes(StandardCharsets.UTF_8)),
+        equals("hello3".getBytes(StandardCharsets.UTF_8)), 0, false);
+    assertEquals(3, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorStart_firstGreaterThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // firstAfter hello
+    List<KeyValue> results = getRange(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 1, true),
+        equals("hello3".getBytes(StandardCharsets.UTF_8)), 0, false);
+    assertEquals(2, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorStart_firstGreaterThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // firstAfterOrEqual to Hello
+    List<KeyValue> results = getRange(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 1, false),
+        equals("hello3".getBytes(StandardCharsets.UTF_8)), 0, false);
+    assertEquals(3, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorStart_lastLessThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // lastLessThanOrEqual "hello"
+    List<KeyValue> results = getRange(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 0, true),
+        equals("hello3".getBytes(StandardCharsets.UTF_8)), 0, false);
+    assertEquals(3, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorStart_lastLessThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // lastLessThan hello0 which is hello.
+    List<KeyValue> results = getRange(stub, keySelector("hello0".getBytes(StandardCharsets.UTF_8), 0, false),
+        equals("hello3".getBytes(StandardCharsets.UTF_8)), 0, false);
+    assertEquals(3, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorEnd_firstGreaterThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // firstAfter hello2
+    List<KeyValue> results = getRange(stub, equals("hello".getBytes(StandardCharsets.UTF_8)),
+        keySelector("hello2".getBytes(StandardCharsets.UTF_8), 1, true), 0, false);
+    assertEquals(3, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorEnd_firstGreaterThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // firstAfterOrEqual to Hello
+    List<KeyValue> results = getRange(stub, equals("hello".getBytes(StandardCharsets.UTF_8)),
+        keySelector("hello3".getBytes(StandardCharsets.UTF_8), 1, false), 0, false);
+    assertEquals(3, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorEnd_lastLessThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // lastLessThanOrEqual "hello"
+    List<KeyValue> results = getRange(stub, equals("hello".getBytes(StandardCharsets.UTF_8)),
+        keySelector("hello3".getBytes(StandardCharsets.UTF_8), 0, true), 0, false);
+    assertEquals(3, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  @Test
+  public void testGetRange_keyselectorEnd_lastLessThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    byte[] worldB = setupRangeTest(stub);
+
+    // lastLessThan hello3 which is hello2.
+    List<KeyValue> results = getRange(stub, equals("hello".getBytes(StandardCharsets.UTF_8)),
+        keySelector("hello3".getBytes(StandardCharsets.UTF_8), 0, false), 0, false);
+    assertEquals(2, results.size());
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+    assertTrue(results.contains(
+        KeyValue.newBuilder().setKey(ByteString.copyFrom("hello1", StandardCharsets.UTF_8)).
+            setValue(ByteString.copyFrom(worldB)).build()
+    ));
+  }
+
+  private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
+    clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
+        "hello4".getBytes(StandardCharsets.UTF_8));
+
+    byte[] worldB = "world".getBytes(StandardCharsets.UTF_8);
+    setKeyAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8), worldB);
+    setKeyAndCommit(stub, "hello1".getBytes(StandardCharsets.UTF_8), worldB);
+    setKeyAndCommit(stub, "hello2".getBytes(StandardCharsets.UTF_8), worldB);
+    setKeyAndCommit(stub, "hello3".getBytes(StandardCharsets.UTF_8), worldB);
+    return worldB;
+  }
+
+  private List<KeyValue> getRange(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                  KeySelector start, KeySelector end, int limit, boolean reverse) {
+    StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
+    stub.execute(DatabaseRequest.newBuilder().
+        setDatabaseName("fdb").setName("testGetRange").setClientIdentifier("unit test").
+        setGetRange(GetRangeRequest.newBuilder().
+            setStartKeySelector(start).
+            setEndKeySelector(end).
+            setLimit(limit).
+            setReverse(reverse).build()).
+        build(), streamObs);
+
+    verify(streamObs, timeout(5000).times(1)).onNext(databaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    DatabaseResponse value = databaseResponseCapture.getValue();
+    assertTrue(value.hasGetRange());
+    return value.getGetRange().getKeyValuesList();
+  }
+
+  private KeySelector keySelector(byte[] key, int offset, boolean orEqual) {
+    return KeySelector.newBuilder().setKey(ByteString.copyFrom(key)).setOffset(offset).setOrEqual(orEqual).build();
+  }
+
+  private KeySelector equals(byte[] key) {
+    return KeySelector.newBuilder().setKey(ByteString.copyFrom(key)).setOffset(1).setOrEqual(false).build();
   }
 
   private void setKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,

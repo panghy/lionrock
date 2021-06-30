@@ -23,6 +23,7 @@ message DatabaseRequest {
     SetValueRequest set_value = 5;
     ClearKeyRequest clear_key = 6;
     ClearKeyRangeRequest clear_range = 7;
+    GetRangeRequest get_range = 8;
   }
 }
 
@@ -32,6 +33,7 @@ message DatabaseResponse {
   oneof response {
     GetValueResponse get_value = 1;
     CommitTransactionResponse committed_transaction = 2;
+    GetRangeResponse get_range = 3;
   }
 }
 
@@ -44,6 +46,7 @@ message StreamingDatabaseRequest {
     SetValueRequest set_value = 4;
     ClearKeyRequest clear_key = 5;
     ClearKeyRangeRequest clear_range = 6;
+    GetRangeRequest get_range = 7;
   }
 }
 
@@ -54,6 +57,7 @@ message StreamingDatabaseResponse {
     CommitTransactionResponse commit_transaction = 2;
     OperationFailureResponse operation_failure = 3;
     GetValueResponse get_value = 4;
+    GetRangeResponse get_range = 5;
   }
 }
 
@@ -84,6 +88,9 @@ message CommitTransactionResponse {
 message GetValueRequest {
   int64 sequence_id = 1;
   bytes key = 2;
+  // whether to do a snapshot get (instead of marking read rows with read conflict ranges).
+  // only apply to streaming transactions.
+  bool snapshot = 3;
 }
 
 // The response for the value to a key.
@@ -111,6 +118,45 @@ message ClearKeyRangeRequest {
   bytes end = 2;
 }
 
+// Gets an ordered range of keys and values from the database.  The begin
+// and end keys are specified by {@code byte[]} arrays, with the begin
+// key inclusive and the end key exclusive.
+message GetRangeRequest {
+  // in streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  // the beginning of the range (inclusive).
+  oneof start {
+    KeySelector startKeySelector = 2;
+    bytes startBytes = 3;
+  }
+  // the end of the range (exclusive).
+  oneof end {
+    KeySelector endKeySelector = 4;
+    bytes endBytes = 5;
+  }
+  // the maximum number of results to return. Limits results to the
+  // <i>first</i> keys in the range. Pass {@link #ROW_LIMIT_UNLIMITED} if this query
+  // should not limit the number of results. If {@code reverse} is {@code true} rows
+  //will be limited starting at the end of the range.
+  int32 limit = 6;
+  // return results starting at the end of the range in reverse order.
+  bool reverse = 7;
+  // provide a hint about how the results are to be used. This
+  // can provide speed improvements or efficiency gains based on the caller's
+  // knowledge of the upcoming access pattern.
+  StreamingMode streamingMode = 8;
+  // whether to do a snapshot get (instead of marking read rows with read conflict ranges).
+  // only apply to streaming transactions.
+  bool snapshot = 9;
+}
+
+message GetRangeResponse {
+  int64 sequence_id = 1;
+  repeated KeyValue keyValues = 2;
+  bool done = 3;
+}
+
 // The response that's streamed back when a single async operation fails.
 message OperationFailureResponse {
   int64 sequence_id = 1;
@@ -122,4 +168,38 @@ message OperationFailureResponse {
 message KeyValue {
   bytes key = 1;
   bytes value = 2;
+}
+
+// Identifies a particular key in the database
+message KeySelector {
+  // the base key to reference
+  bytes key = 1;
+  // {@code true} if the key selector should resolve to
+  // {@code key} (if {@code key} is present) before accounting for the offset
+  bool orEqual = 2;
+  // the offset (in number of keys) that the selector will advance after
+  // resolving to a key based on the {@code key} and {@code orEqual} parameters
+  int32 offset = 3;
+}
+
+// Options that controls how range reads are done.
+enum StreamingMode {
+  // The default. The client doesn't know how much of the range it is
+  // likely to used and wants different performance concerns to be balanced.
+  // Only a small portion of data is transferred to the client initially
+  // (in order to minimize costs if the client doesn't read the entire range),
+  // and as the caller iterates over more items in the range larger batches
+  // will be transferred in order to minimize latency. After enough iterations,
+  // the iterator mode will eventually reach the same byte limit as
+  // {@code WANT_ALL}.
+  ITERATOR = 0;
+  // Client intends to consume the entire range and would like it all
+  // transferred as early as possible.
+  WANT_ALL = 1;
+  // Infrequently used. The client has passed a specific row limit and wants that
+  // many rows delivered in a single batch. Because of iterator operation in
+  // client drivers make request batches transparent to the user, consider
+  // {@code WANT_ALL} StreamingMode instead. A row limit must be specified if
+  // this mode is used.
+  EXACT = 2;
 }

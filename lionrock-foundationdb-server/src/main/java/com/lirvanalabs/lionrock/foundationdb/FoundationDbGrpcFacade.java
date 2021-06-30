@@ -1,9 +1,11 @@
 package com.lirvanalabs.lionrock.foundationdb;
 
-import com.apple.foundationdb.Database;
-import com.apple.foundationdb.FDB;
-import com.apple.foundationdb.FDBException;
-import com.apple.foundationdb.Transaction;
+import com.apple.foundationdb.KeySelector;
+import com.apple.foundationdb.KeyValue;
+import com.apple.foundationdb.StreamingMode;
+import com.apple.foundationdb.*;
+import com.apple.foundationdb.async.AsyncIterable;
+import com.apple.foundationdb.async.AsyncIterator;
 import com.google.protobuf.ByteString;
 import com.lirvanalabs.lionrock.proto.*;
 import io.grpc.Context;
@@ -22,12 +24,16 @@ import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
@@ -37,8 +43,6 @@ import static java.util.concurrent.CompletableFuture.completedFuture;
 @GRpcService
 @Component
 public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreImplBase {
-
-  static final CompletableFuture<?> DONE = completedFuture(null);
 
   Logger logger = LoggerFactory.getLogger(FoundationDbGrpcFacade.class);
 
@@ -73,7 +77,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     }
     if (logger.isDebugEnabled()) {
       String msg = "Executing DatabaseRequest from: " + request.getClientIdentifier() + " on database: " +
-              request.getDatabaseName() + " named: " + request.getName();
+          request.getDatabaseName() + " named: " + request.getName();
       logger.debug(msg);
       if (overallSpan != null) {
         overallSpan.event(msg);
@@ -103,12 +107,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         setTransactionDeadline(rpcContext, tx);
         return tx.get(request.getGetValue().getKey().toByteArray());
       }), overallSpan, responseObserver, "failed to get key").thenAccept(val -> {
-        try (Tracer.SpanInScope ignored2 = tracer.withSpan(overallSpan)) {
+        try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
           GetValueResponse.Builder build = GetValueResponse.newBuilder();
           if (logger.isDebugEnabled()) {
             String msg = "GetValueRequest on: " +
-                    printable(request.getGetValue().getKey().toByteArray()) + " is: " +
-                    printable(val);
+                printable(request.getGetValue().getKey().toByteArray()) + " is: " +
+                printable(val);
             logger.debug(msg);
             if (overallSpan != null) {
               overallSpan.event(msg);
@@ -129,7 +133,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       }
       if (logger.isDebugEnabled()) {
         String msg = "SetValueRequest on: " + printable(request.getSetValue().getKey().toByteArray()) + " => " +
-                printable(request.getSetValue().getValue().toByteArray());
+            printable(request.getSetValue().getValue().toByteArray());
         logger.debug(msg);
         if (overallSpan != null) {
           overallSpan.event(msg);
@@ -166,7 +170,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       }
       if (logger.isDebugEnabled()) {
         String msg = "ClearRangeRequest on: " + printable(request.getClearRange().getStart().toByteArray()) + " => " +
-                printable(request.getClearRange().getEnd().toByteArray());
+            printable(request.getClearRange().getEnd().toByteArray());
         logger.debug(msg);
         if (overallSpan != null) {
           overallSpan.event(msg);
@@ -181,6 +185,82 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 return completedFuture(tx);
               }), overallSpan, responseObserver, "failed to set key"),
           responseObserver);
+    } else if (request.hasGetRange()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "get_range");
+      }
+      GetRangeRequest req = request.getGetRange();
+      KeySelector start;
+      if (req.hasStartBytes()) {
+        start = new KeySelector(req.getStartBytes().toByteArray(), true, 0);
+      } else if (req.hasStartKeySelector()) {
+        start = new KeySelector(req.getStartKeySelector().getKey().toByteArray(),
+            req.getStartKeySelector().getOrEqual(), req.getStartKeySelector().getOffset());
+      } else {
+        throw Status.INVALID_ARGUMENT.withDescription("must have start").asRuntimeException();
+      }
+      KeySelector end;
+      if (req.hasEndBytes()) {
+        end = new KeySelector(req.getEndBytes().toByteArray(), true, 0);
+      } else if (req.hasEndKeySelector()) {
+        end = new KeySelector(req.getEndKeySelector().getKey().toByteArray(),
+            req.getEndKeySelector().getOrEqual(), req.getEndKeySelector().getOffset());
+      } else {
+        throw Status.INVALID_ARGUMENT.withDescription("must have end").asRuntimeException();
+      }
+      if (logger.isDebugEnabled()) {
+        String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+            " limit: " + req.getLimit() + " mode: " + req.getStreamingMode();
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
+      }
+      StreamingMode mode = StreamingMode.ITERATOR;
+      switch (req.getStreamingMode()) {
+        case ITERATOR:
+          mode = StreamingMode.ITERATOR;
+          break;
+        case WANT_ALL:
+          mode = StreamingMode.WANT_ALL;
+          break;
+        case EXACT:
+          mode = StreamingMode.EXACT;
+          break;
+        case UNRECOGNIZED:
+          mode = StreamingMode.ITERATOR;
+          break;
+      }
+      StreamingMode finalMode = mode;
+      handleException(db.runAsync(tx -> tx.getRange(start, end, req.getLimit(), req.getReverse(), finalMode).asList()),
+          overallSpan, responseObserver, "failed to get range").thenAccept(results -> {
+        try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
+          GetRangeResponse.Builder build = GetRangeResponse.newBuilder();
+          if (logger.isDebugEnabled()) {
+            String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() + " got: " + results.size() + " rows";
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (overallSpan != null) {
+            overallSpan.tag("rows", String.valueOf(results.size()));
+          }
+          List<com.lirvanalabs.lionrock.proto.KeyValue> keyValues = new ArrayList<>(results.size());
+          for (KeyValue result : results) {
+            keyValues.add(com.lirvanalabs.lionrock.proto.KeyValue.newBuilder().
+                setKey(ByteString.copyFrom(result.getKey())).
+                setValue(ByteString.copyFrom(result.getValue())).build());
+          }
+          build.addAllKeyValues(keyValues);
+          build.setDone(true);
+          responseObserver.onNext(DatabaseResponse.newBuilder().
+              setGetRange(build.build()).
+              build());
+          responseObserver.onCompleted();
+        }
+      });
     }
   }
 
@@ -193,6 +273,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
       private final AtomicReference<StartTransactionRequest> startRequest = new AtomicReference<>();
       private final AtomicBoolean commitStarted = new AtomicBoolean();
+      private final AtomicLong rowsWritten = new AtomicLong();
+      private final AtomicLong rowsRead = new AtomicLong();
+      private final AtomicLong rangeGets = new AtomicLong();
+      private final AtomicLong rangeGetBatches = new AtomicLong();
+      private final AtomicLong clears = new AtomicLong();
       private volatile Transaction tx;
 
       @Override
@@ -201,8 +286,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           StartTransactionRequest startRequest = this.startRequest.updateAndGet(startTransactionRequest -> {
             if (startTransactionRequest != null) {
               StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
-                      withDescription("cannot send StartTransactionRequest twice").
-                      asRuntimeException();
+                  withDescription("cannot send StartTransactionRequest twice").
+                  asRuntimeException();
               responseObserver.onError(toThrow);
               throw toThrow;
             }
@@ -210,15 +295,15 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           });
           if (logger.isDebugEnabled()) {
             String msg = "Starting transaction " + startRequest.getName() + " against db: " +
-                    startRequest.getDatabaseName();
+                startRequest.getDatabaseName();
             logger.debug(msg);
             overallSpan.event(msg);
           }
           Database db = databaseMap.get(startRequest.getDatabaseName());
           if (db == null) {
             StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
-                    withDescription("cannot find database named: " + startRequest.getDatabaseName()).
-                    asRuntimeException();
+                withDescription("cannot find database named: " + startRequest.getDatabaseName()).
+                asRuntimeException();
             responseObserver.onError(toThrow);
             throw toThrow;
           }
@@ -237,8 +322,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           hasActiveTransactionOrThrow();
           if (commitStarted.getAndSet(true)) {
             StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
-                    withDescription("transaction already committed").
-                    asRuntimeException();
+                withDescription("transaction already committed").
+                asRuntimeException();
             responseObserver.onError(toThrow);
             throw toThrow;
           }
@@ -252,8 +337,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               thenAccept(x -> {
                 try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
                   responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                          setCommitTransaction(CommitTransactionResponse.newBuilder().
-                                  setCommittedVersion(tx.getCommittedVersion()).build()).build());
+                      setCommitTransaction(CommitTransactionResponse.newBuilder().
+                          setCommittedVersion(tx.getCommittedVersion()).build()).build());
                   if (logger.isDebugEnabled()) {
                     String msg = "Committed transaction: " + tx.getCommittedVersion();
                     opSpan.event(msg);
@@ -277,7 +362,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_value");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
           GetValueRequest getValueRequest = value.getGetValue();
-          tx.get(getValueRequest.getKey().toByteArray()).whenComplete((val, throwable) -> {
+          CompletableFuture<byte[]> getFuture = getValueRequest.getSnapshot() ?
+              tx.snapshot().get(getValueRequest.getKey().toByteArray()) :
+              tx.get(getValueRequest.getKey().toByteArray());
+          getFuture.whenComplete((val, throwable) -> {
             try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
               if (throwable != null) {
                 handleThrowable(opSpan, throwable,
@@ -294,11 +382,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetValueRequest on: " +
-                          printable(value.getGetValue().getKey().toByteArray()) + " is: " +
-                          printable(val);
+                      printable(value.getGetValue().getKey().toByteArray()) + " is: " +
+                      printable(val);
                   logger.debug(msg);
                   opSpan.event(msg);
                 }
+                rowsRead.incrementAndGet();
                 GetValueResponse.Builder build = GetValueResponse.newBuilder().
                     setSequenceId(value.getGetValue().getSequenceId());
                 if (val != null) {
@@ -317,33 +406,182 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
             String msg = "SetValueRequest for: " +
-                    printable(value.getSetValue().getKey().toByteArray()) + " => " +
-                    printable(value.getSetValue().getValue().toByteArray());
+                printable(value.getSetValue().getKey().toByteArray()) + " => " +
+                printable(value.getSetValue().getValue().toByteArray());
             logger.debug(msg);
             overallSpan.event(msg);
           }
+          rowsWritten.incrementAndGet();
           tx.set(value.getSetValue().getKey().toByteArray(),
               value.getSetValue().getValue().toByteArray());
         } else if (value.hasClearKey()) {
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
             String msg = "ClearKeyRequest for: " +
-                    printable(value.getClearKey().getKey().toByteArray());
+                printable(value.getClearKey().getKey().toByteArray());
             logger.debug(msg);
             overallSpan.event(msg);
           }
+          clears.incrementAndGet();
           tx.clear(value.getClearKey().getKey().toByteArray());
         } else if (value.hasClearRange()) {
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
             String msg = "ClearKeyRangeRequest for: " +
-                    printable(value.getClearRange().getStart().toByteArray()) + " => " +
-                    printable(value.getClearRange().getEnd().toByteArray());
+                printable(value.getClearRange().getStart().toByteArray()) + " => " +
+                printable(value.getClearRange().getEnd().toByteArray());
             logger.debug(msg);
             overallSpan.event(msg);
           }
+          clears.incrementAndGet();
           tx.clear(value.getClearRange().getStart().toByteArray(),
               value.getClearRange().getEnd().toByteArray());
+        } else if (value.hasGetRange()) {
+          hasActiveTransactionOrThrow();
+          rangeGets.incrementAndGet();
+          // start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_range").start();
+          try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan.start())) {
+            GetRangeRequest req = value.getGetRange();
+            KeySelector start;
+            if (req.hasStartBytes()) {
+              start = new KeySelector(req.getStartBytes().toByteArray(), true, 0);
+            } else if (req.hasStartKeySelector()) {
+              start = new KeySelector(req.getStartKeySelector().getKey().toByteArray(),
+                  req.getStartKeySelector().getOrEqual(), req.getStartKeySelector().getOffset());
+            } else {
+              OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                  setSequenceId(value.getGetValue().getSequenceId()).
+                  setMessage("must have start");
+              responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                  setOperationFailure(builder.build()).
+                  build());
+              throw Status.INVALID_ARGUMENT.withDescription("must have start").asRuntimeException();
+            }
+            KeySelector end;
+            if (req.hasEndBytes()) {
+              end = new KeySelector(req.getEndBytes().toByteArray(), true, 0);
+            } else if (req.hasEndKeySelector()) {
+              end = new KeySelector(req.getEndKeySelector().getKey().toByteArray(),
+                  req.getEndKeySelector().getOrEqual(), req.getEndKeySelector().getOffset());
+            } else {
+              OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                  setSequenceId(value.getGetValue().getSequenceId()).
+                  setMessage("must have end");
+              responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                  setOperationFailure(builder.build()).
+                  build());
+              throw Status.INVALID_ARGUMENT.withDescription("must have end").asRuntimeException();
+            }
+            if (logger.isDebugEnabled()) {
+              String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                  " limit: " + req.getLimit() + " mode: " + req.getStreamingMode();
+              logger.debug(msg);
+              overallSpan.event(msg);
+            }
+            StreamingMode mode = StreamingMode.ITERATOR;
+            switch (req.getStreamingMode()) {
+              case ITERATOR:
+                mode = StreamingMode.ITERATOR;
+                break;
+              case WANT_ALL:
+                mode = StreamingMode.WANT_ALL;
+                break;
+              case EXACT:
+                mode = StreamingMode.EXACT;
+                break;
+              case UNRECOGNIZED:
+                mode = StreamingMode.ITERATOR;
+                break;
+            }
+            AsyncIterable<KeyValue> range = req.getSnapshot() ?
+                tx.snapshot().getRange(start, end, req.getLimit(), req.getReverse(), mode) :
+                tx.getRange(start, end, req.getLimit(), req.getReverse(), mode);
+            AsyncIterator<KeyValue> iterator = range.iterator();
+            // consumer that collects key values and returns them to the user.
+            AtomicLong rows = new AtomicLong();
+            AtomicLong batches = new AtomicLong();
+            BiConsumer<Boolean, Throwable> hasNextConsumer = new BiConsumer<>() {
+
+              private final List<com.lirvanalabs.lionrock.proto.KeyValue> keyValues = new ArrayList<>();
+
+              @Override
+              public void accept(Boolean hasNext, Throwable throwable) {
+                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+                  boolean done = !hasNext;
+                  if (throwable != null) {
+                    handleThrowable(opSpan, throwable,
+                        () -> "failed to get range for start: " + start + " end: " + end +
+                            " reverse: " + req.getReverse() + " limit: " + req.getLimit() +
+                            " mode: " + req.getStreamingMode());
+                    OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                        setSequenceId(value.getGetValue().getSequenceId()).
+                        setMessage(throwable.getMessage());
+                    if (throwable instanceof FDBException) {
+                      builder.setCode(((FDBException) throwable).getCode());
+                    }
+                    opSpan.tag("rows_read", String.valueOf(rows.get()));
+                    opSpan.tag("batches", String.valueOf(batches.get()));
+                    opSpan.end();
+                    responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                        setOperationFailure(builder.build()).
+                        build());
+                    return;
+                  } else if (hasNext) {
+                    // spool everything until the onHasNext CompletableFuture is pending.
+                    while (iterator.onHasNext().isDone() &&
+                        !iterator.onHasNext().isCompletedExceptionally()) {
+                      if (!iterator.hasNext()) {
+                        done = true;
+                        break;
+                      }
+                      KeyValue next = iterator.next();
+                      rows.incrementAndGet();
+                      synchronized (keyValues) {
+                        keyValues.add(com.lirvanalabs.lionrock.proto.KeyValue.newBuilder().
+                            setKey(ByteString.copyFrom(next.getKey())).
+                            setValue(ByteString.copyFrom(next.getValue())).
+                            build());
+                      }
+                    }
+                  }
+                  // flush what we have.
+                  flush(done);
+                  if (done) {
+                    opSpan.tag("rows_read", String.valueOf(rows.get()));
+                    opSpan.tag("batches", String.valueOf(batches.get()));
+                    opSpan.end();
+                  } else {
+                    // schedule the callback on when the future is ready.
+                    iterator.onHasNext().whenComplete(this);
+                  }
+                }
+              }
+
+              private void flush(boolean done) {
+                if (!done && keyValues.isEmpty()) {
+                  return;
+                }
+                batches.incrementAndGet();
+                rangeGetBatches.incrementAndGet();
+                rowsRead.addAndGet(keyValues.size());
+                if (logger.isDebugEnabled()) {
+                  String msg = "Flushing: " + keyValues.size() + " rows, done: " + done;
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                    setGetRange(GetRangeResponse.newBuilder().
+                        setDone(done).
+                        addAllKeyValues(keyValues).
+                        setSequenceId(req.getSequenceId()).
+                        build()).
+                    build());
+                keyValues.clear();
+              }
+            };
+            iterator.onHasNext().whenComplete(hasNextConsumer);
+          }
         }
       }
 
@@ -359,7 +597,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
       @Override
       public void onError(Throwable t) {
-        logger.warn("onError from client in executeTransaction");
+        logger.warn("onError from client in executeTransaction", t);
         if (tx != null) {
           tx.cancel();
           tx.close();
@@ -376,6 +614,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             tx.cancel();
           }
           tx.close();
+        }
+        if (overallSpan != null) {
+          overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
+          overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
+          overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
+          overallSpan.tag("clears", String.valueOf(clears.get()));
         }
         // when the client closes the connection, we also close the connection to it.
         try {
