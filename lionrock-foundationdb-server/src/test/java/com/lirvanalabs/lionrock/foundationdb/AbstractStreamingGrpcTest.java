@@ -1,0 +1,184 @@
+package com.lirvanalabs.lionrock.foundationdb;
+
+import com.google.protobuf.ByteString;
+import com.lirvanalabs.lionrock.proto.*;
+import io.grpc.stub.StreamObserver;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
+
+  List<KeyValue> getRange(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                          KeySelector start, KeySelector end, int limit, boolean reverse) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("getRange").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetRange(GetRangeRequest.newBuilder().
+            setStartKeySelector(start).
+            setEndKeySelector(end).
+            setLimit(limit).
+            setReverse(reverse).
+            setStreamingMode(StreamingMode.WANT_ALL).
+            build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
+    assertTrue(value.hasGetRange());
+    assertTrue(value.getGetRange().getDone());
+
+    return value.getGetRange().getKeyValuesList();
+  }
+
+  long setKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                       byte[] key, byte[] value) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamingDatabaseResponse response;
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("setKeyAndCommit").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setSetValue(SetValueRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            setValue(ByteString.copyFrom(value)).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    response = streamingDatabaseResponseCapture.getValue();
+    assertTrue(response.hasCommitTransaction());
+
+    return response.getCommitTransaction().getCommittedVersion();
+  }
+
+  long clearKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                         byte[] key) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamingDatabaseResponse response;
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("setKeyAndCommit").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setClearKey(ClearKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    response = streamingDatabaseResponseCapture.getValue();
+    assertTrue(response.hasCommitTransaction());
+
+    return response.getCommitTransaction().getCommittedVersion();
+  }
+
+  long clearRangeAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                           byte[] start, byte[] end) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamingDatabaseResponse response;
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("setKeyAndCommit").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setClearRange(ClearKeyRangeRequest.newBuilder().
+            setStart(ByteString.copyFrom(start)).
+            setEnd(ByteString.copyFrom(end)).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    response = streamingDatabaseResponseCapture.getValue();
+    assertTrue(response.hasCommitTransaction());
+
+    return response.getCommitTransaction().getCommittedVersion();
+  }
+
+  String getValue(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, byte[] key) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamingDatabaseResponse value;
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("getValue").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetValue(GetValueRequest.newBuilder().setKey(ByteString.copyFrom(key)).build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    value = streamingDatabaseResponseCapture.getValue();
+    assertTrue(value.hasGetValue());
+
+    if (!value.getGetValue().hasValue()) {
+      return null;
+    }
+    return value.getGetValue().getValue().toStringUtf8();
+  }
+}

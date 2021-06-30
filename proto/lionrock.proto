@@ -20,10 +20,10 @@ message DatabaseRequest {
 
   oneof request {
     GetValueRequest get_value = 4;
-    SetValueRequest set_value = 5;
-    ClearKeyRequest clear_key = 6;
-    ClearKeyRangeRequest clear_range = 7;
-    GetRangeRequest get_range = 8;
+    GetRangeRequest get_range = 5;
+    SetValueRequest set_value = 6;
+    ClearKeyRequest clear_key = 7;
+    ClearKeyRangeRequest clear_range = 8;
   }
 }
 
@@ -32,8 +32,8 @@ message DatabaseResponse {
   // The response from the original request.
   oneof response {
     GetValueResponse get_value = 1;
-    CommitTransactionResponse committed_transaction = 2;
-    GetRangeResponse get_range = 3;
+    GetRangeResponse get_range = 2;
+    CommitTransactionResponse committed_transaction = 3;
   }
 }
 
@@ -47,6 +47,9 @@ message StreamingDatabaseRequest {
     ClearKeyRequest clear_key = 5;
     ClearKeyRangeRequest clear_range = 6;
     GetRangeRequest get_range = 7;
+    AddConflictKeyRequest add_conflict_key = 8;
+    AddConflictRangeRequest add_conflict_range = 9;
+    GetReadVersionRequest get_read_version = 10;
   }
 }
 
@@ -58,6 +61,7 @@ message StreamingDatabaseResponse {
     OperationFailureResponse operation_failure = 3;
     GetValueResponse get_value = 4;
     GetRangeResponse get_range = 5;
+    GetReadVersionResponse get_read_version = 6;
   }
 }
 
@@ -151,10 +155,51 @@ message GetRangeRequest {
   bool snapshot = 9;
 }
 
+// The response (or a single batch of many) when getting a range of keys.
 message GetRangeResponse {
   int64 sequence_id = 1;
   repeated KeyValue keyValues = 2;
   bool done = 3;
+}
+
+// A request to add a conflict key for determining what keys are involved in a transaction.
+message AddConflictKeyRequest {
+  // the key to add as a conflict key.
+  bytes key = 1;
+  // if false (default), add a key to the transaction's read conflict ranges as if you had read
+  // the key. As a result, other transactions that concurrently write this key
+  // could cause the transaction to fail with a conflict.
+  // if true, add a key to the transaction's write conflict ranges as if you had
+  // written the key. As a result, other transactions that concurrently read
+  // this key could fail with a conflict.
+  bool write = 2;
+}
+
+// A request to add a conflict range for determining what keys are involved in a transaction.
+// Manages conflict ranges for determining what keys are involved in a transaction.
+message AddConflictRangeRequest {
+  // the start key (inclusive) to add as a conflict key.
+  bytes start = 1;
+  // the end (exclusive) to add as a conflict key.
+  bytes end = 2;
+  // if false (default), add a range of keys to the transaction's read conflict ranges as if you
+  // had read the range. As a result, other transactions that write a key in
+  // this range could cause the transaction to fail with a conflict.
+  // if true, add a key to the transaction's read conflict ranges as if you had read
+  // the key. As a result, other transactions that concurrently write this key
+  // could cause the transaction to fail with a conflict.
+  bool write = 3;
+}
+
+// A request to get the current read version.
+message GetReadVersionRequest {
+  int64 sequence_id = 1;
+}
+
+// A response to getting the read version.
+message GetReadVersionResponse {
+  int64 sequence_id = 1;
+  int64 read_version = 2;
 }
 
 // The response that's streamed back when a single async operation fails.

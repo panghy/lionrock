@@ -275,9 +275,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicBoolean commitStarted = new AtomicBoolean();
       private final AtomicLong rowsWritten = new AtomicLong();
       private final AtomicLong rowsRead = new AtomicLong();
+      private final AtomicLong getReadVersion = new AtomicLong();
       private final AtomicLong rangeGets = new AtomicLong();
       private final AtomicLong rangeGetBatches = new AtomicLong();
       private final AtomicLong clears = new AtomicLong();
+      private final AtomicLong readConflictAdds = new AtomicLong();
+      private final AtomicLong writeConflictAdds = new AtomicLong();
       private volatile Transaction tx;
 
       @Override
@@ -445,7 +448,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             GetRangeRequest req = value.getGetRange();
             KeySelector start;
             if (req.hasStartBytes()) {
-              start = new KeySelector(req.getStartBytes().toByteArray(), true, 0);
+              start = new KeySelector(req.getStartBytes().toByteArray(), false, 1);
             } else if (req.hasStartKeySelector()) {
               start = new KeySelector(req.getStartKeySelector().getKey().toByteArray(),
                   req.getStartKeySelector().getOrEqual(), req.getStartKeySelector().getOffset());
@@ -460,7 +463,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
             KeySelector end;
             if (req.hasEndBytes()) {
-              end = new KeySelector(req.getEndBytes().toByteArray(), true, 0);
+              end = new KeySelector(req.getEndBytes().toByteArray(), false, 1);
             } else if (req.hasEndKeySelector()) {
               end = new KeySelector(req.getEndKeySelector().getKey().toByteArray(),
                   req.getEndKeySelector().getOrEqual(), req.getEndKeySelector().getOffset());
@@ -585,6 +588,82 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             };
             iterator.onHasNext().whenComplete(hasNextConsumer);
           }
+        } else if (value.hasAddConflictKey()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            String msg = "AddConflictKeyRequest for: " + printable(value.getAddConflictKey().getKey().toByteArray()) +
+                " write: " + value.getAddConflictKey().getWrite();
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (value.getAddConflictKey().getWrite()) {
+            writeConflictAdds.incrementAndGet();
+            tx.addWriteConflictKey(value.getAddConflictKey().getKey().toByteArray());
+          } else {
+            readConflictAdds.incrementAndGet();
+            tx.addReadConflictKey(value.getAddConflictKey().getKey().toByteArray());
+          }
+        } else if (value.hasAddConflictRange()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            String msg = "AddConflictRangeRequest from: " +
+                printable(value.getAddConflictRange().getStart().toByteArray()) + " to: " +
+                printable(value.getAddConflictRange().getEnd().toByteArray()) +
+                " write: " + value.getAddConflictRange().getWrite();
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (value.getAddConflictRange().getWrite()) {
+            writeConflictAdds.incrementAndGet();
+            tx.addWriteConflictRange(value.getAddConflictRange().getStart().toByteArray(),
+                value.getAddConflictRange().getEnd().toByteArray());
+          } else {
+            readConflictAdds.incrementAndGet();
+            tx.addReadConflictRange(value.getAddConflictRange().getStart().toByteArray(),
+                value.getAddConflictRange().getEnd().toByteArray());
+          }
+        } else if (value.hasGetReadVersion()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            logger.debug("GetReadVersion");
+            if (overallSpan != null) {
+              overallSpan.event("GetReadVersion");
+            }
+          }// start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_read_version");
+          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+          tx.getReadVersion().whenComplete((val, throwable) -> {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable, () -> "failed to get read version");
+                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                    setSequenceId(value.getGetReadVersion().getSequenceId()).
+                    setMessage(throwable.getMessage());
+                if (throwable instanceof FDBException) {
+                  builder.setCode(((FDBException) throwable).getCode());
+                }
+                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                    setOperationFailure(builder.build()).
+                    build());
+              } else {
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetReadVersion is: " + val;
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                getReadVersion.incrementAndGet();
+                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                    setGetReadVersion(GetReadVersionResponse.newBuilder().setReadVersion(val).build()).build());
+              }
+            } finally {
+              opScope.close();
+              opSpan.end();
+            }
+          });
         }
       }
 

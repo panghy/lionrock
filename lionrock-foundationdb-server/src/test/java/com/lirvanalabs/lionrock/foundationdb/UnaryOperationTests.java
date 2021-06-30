@@ -12,14 +12,7 @@ import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.lognet.springboot.grpc.GRpcServerRunner;
 import org.lognet.springboot.grpc.autoconfigure.GRpcServerProperties;
-import org.lognet.springboot.grpc.context.LocalRunningGrpcPort;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.Resource;
 
 import java.io.IOException;
@@ -29,31 +22,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE;
 
-@SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=-1"})
-class UnaryOperationTests {
-
-  @Autowired(required = false)
-  @Qualifier("grpcServerRunner")
-  protected GRpcServerRunner grpcServerRunner;
-
-  @Autowired
-  protected GRpcServerProperties gRpcServerProperties;
-
-  @LocalRunningGrpcPort
-  protected int runningPort;
-
-  @Captor
-  ArgumentCaptor<StatusRuntimeException> statusRuntimeExceptionArgumentCaptor;
-
-  @Captor
-  ArgumentCaptor<StreamingDatabaseResponse> streamingDatabaseResponseCapture;
-
-  @Captor
-  ArgumentCaptor<DatabaseResponse> databaseResponseCapture;
-
-  protected ManagedChannel channel;
+class UnaryOperationTests extends AbstractGrpcTest {
 
   @BeforeEach
   public void setupChannel() throws IOException {
@@ -423,14 +393,6 @@ class UnaryOperationTests {
     DatabaseResponse value = databaseResponseCapture.getValue();
     assertTrue(value.hasGetRange());
     return value.getGetRange().getKeyValuesList();
-  }
-
-  private KeySelector keySelector(byte[] key, int offset, boolean orEqual) {
-    return KeySelector.newBuilder().setKey(ByteString.copyFrom(key)).setOffset(offset).setOrEqual(orEqual).build();
-  }
-
-  private KeySelector equals(byte[] key) {
-    return KeySelector.newBuilder().setKey(ByteString.copyFrom(key)).setOffset(1).setOrEqual(false).build();
   }
 
   private void setKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
