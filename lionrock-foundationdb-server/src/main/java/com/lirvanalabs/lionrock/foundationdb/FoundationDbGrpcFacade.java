@@ -7,6 +7,7 @@ import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
 import com.apple.foundationdb.async.AsyncIterator;
 import com.google.protobuf.ByteString;
+import com.lirvanalabs.lionrock.proto.MutationType;
 import com.lirvanalabs.lionrock.proto.*;
 import io.grpc.Context;
 import io.grpc.Metadata;
@@ -104,7 +105,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         }
       }
       handleException(db.runAsync(tx -> {
-        setTransactionDeadline(rpcContext, tx);
+        prepareTx(request, rpcContext, tx);
         return tx.get(request.getGetValue().getKey().toByteArray());
       }), overallSpan, responseObserver, "failed to get key").thenAccept(val -> {
         try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
@@ -142,7 +143,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       handleCommittedTransaction(
           handleException(
               db.runAsync(tx -> {
-                setTransactionDeadline(rpcContext, tx);
+                prepareTx(request, rpcContext, tx);
                 tx.set(request.getSetValue().getKey().toByteArray(), request.getSetValue().getValue().toByteArray());
                 return completedFuture(tx);
               }), overallSpan, responseObserver, "failed to set key"),
@@ -159,7 +160,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       handleCommittedTransaction(
           handleException(
               db.runAsync(tx -> {
-                setTransactionDeadline(rpcContext, tx);
+                prepareTx(request, rpcContext, tx);
                 tx.clear(request.getClearKey().getKey().toByteArray());
                 return completedFuture(tx);
               }), overallSpan, responseObserver, "failed to set key"),
@@ -179,7 +180,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       handleCommittedTransaction(
           handleException(
               db.runAsync(tx -> {
-                setTransactionDeadline(rpcContext, tx);
+                prepareTx(request, rpcContext, tx);
                 tx.clear(request.getClearRange().getStart().toByteArray(),
                     request.getClearRange().getEnd().toByteArray());
                 return completedFuture(tx);
@@ -232,7 +233,13 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           break;
       }
       StreamingMode finalMode = mode;
-      handleException(db.runAsync(tx -> tx.getRange(start, end, req.getLimit(), req.getReverse(), finalMode).asList()),
+      handleException(db.runAsync(tx -> {
+            prepareTx(request, rpcContext, tx);
+            if (request.getReadVersion() > 0) {
+              tx.setReadVersion(request.getReadVersion());
+            }
+            return tx.getRange(start, end, req.getLimit(), req.getReverse(), finalMode).asList();
+          }),
           overallSpan, responseObserver, "failed to get range").thenAccept(results -> {
         try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
           GetRangeResponse.Builder build = GetRangeResponse.newBuilder();
@@ -261,6 +268,30 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           responseObserver.onCompleted();
         }
       });
+    } else if (request.hasMutateValue()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "mutate_value");
+      }
+      if (logger.isDebugEnabled()) {
+        String msg = "MutateValueRequest on: " +
+            printable(request.getMutateValue().getKey().toByteArray()) + " => " +
+            printable(request.getMutateValue().getParam().toByteArray()) + " with: " +
+            request.getMutateValue().getType();
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
+      }
+      handleCommittedTransaction(
+          handleException(
+              db.runAsync(tx -> {
+                prepareTx(request, rpcContext, tx);
+                tx.mutate(getMutationType(request.getMutateValue().getType()),
+                    request.getMutateValue().getKey().toByteArray(),
+                    request.getMutateValue().getParam().toByteArray());
+                return completedFuture(tx);
+              }), overallSpan, responseObserver, "failed to mutate key"),
+          responseObserver);
     }
   }
 
@@ -274,6 +305,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicReference<StartTransactionRequest> startRequest = new AtomicReference<>();
       private final AtomicBoolean commitStarted = new AtomicBoolean();
       private final AtomicLong rowsWritten = new AtomicLong();
+      private final AtomicLong rowsMutated = new AtomicLong();
       private final AtomicLong rowsRead = new AtomicLong();
       private final AtomicLong getReadVersion = new AtomicLong();
       private final AtomicLong rangeGets = new AtomicLong();
@@ -311,7 +343,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             throw toThrow;
           }
           tx = db.createTransaction();
-          setTransactionDeadline(rpcContext, tx);
+          setDeadline(rpcContext, tx);
           if (overallSpan != null) {
             overallSpan.tag("client", startRequest.getClientIdentifier()).
                 tag("database_name", startRequest.getDatabaseName()).
@@ -664,6 +696,51 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               opSpan.end();
             }
           });
+        } else if (value.hasSetReadVersion()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            String msg = "SetReadVersion at: " + value.getSetReadVersion().getReadVersion();
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          tx.setReadVersion(value.getSetReadVersion().getReadVersion());
+        } else if (value.hasSetTransactionOption()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            String msg = "SetTransactionOption: " + value.getSetTransactionOption().getOption() + " with: " +
+                (value.getSetTransactionOption().hasParam() ?
+                    printable(value.getSetTransactionOption().getParam().toByteArray()) : null);
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (value.getSetTransactionOption().hasParam()) {
+            tx.options().getOptionConsumer().setOption(
+                value.getSetTransactionOption().getOption(),
+                value.getSetTransactionOption().getParam().toByteArray());
+          } else {
+            tx.options().getOptionConsumer().setOption(
+                value.getSetTransactionOption().getOption(), null);
+          }
+        } else if (value.hasMutateValue()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            String msg = "MutateValueRequest for: " +
+                printable(value.getMutateValue().getKey().toByteArray()) + " => " +
+                printable(value.getMutateValue().getParam().toByteArray()) + " with: " +
+                value.getMutateValue().getType();
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          rowsMutated.incrementAndGet();
+          tx.mutate(getMutationType(value.getMutateValue().getType()),
+              value.getMutateValue().getKey().toByteArray(),
+              value.getMutateValue().getParam().toByteArray());
         }
       }
 
@@ -698,10 +775,30 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           tx.close();
         }
         if (overallSpan != null) {
-          overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
-          overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
-          overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
-          overallSpan.tag("clears", String.valueOf(clears.get()));
+          if (rowsRead.get() > 0) {
+            overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
+          }
+          if (rangeGetBatches.get() > 0) {
+            overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
+          }
+          if (rowsWritten.get() > 0) {
+            overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
+          }
+          if (clears.get() > 0) {
+            overallSpan.tag("clears", String.valueOf(clears.get()));
+          }
+          if (getReadVersion.get() > 0) {
+            overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
+          }
+          if (readConflictAdds.get() > 0) {
+            overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
+          }
+          if (writeConflictAdds.get() > 0) {
+            overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
+          }
+          if (rowsMutated.get() > 0) {
+            overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
+          }
         }
         // when the client closes the connection, we also close the connection to it.
         try {
@@ -713,7 +810,57 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     };
   }
 
-  private void setTransactionDeadline(Context rpcContext, Transaction tx) {
+  private com.apple.foundationdb.MutationType getMutationType(MutationType mutationType) {
+    switch (mutationType) {
+      case ADD:
+        return com.apple.foundationdb.MutationType.ADD;
+      case BIT_AND:
+        return com.apple.foundationdb.MutationType.BIT_AND;
+      case BIT_OR:
+        return com.apple.foundationdb.MutationType.BIT_OR;
+      case BIT_XOR:
+        return com.apple.foundationdb.MutationType.BIT_XOR;
+      case APPEND_IF_FITS:
+        return com.apple.foundationdb.MutationType.APPEND_IF_FITS;
+      case MAX:
+        return com.apple.foundationdb.MutationType.MAX;
+      case MIN:
+        return com.apple.foundationdb.MutationType.MIN;
+      case SET_VERSIONSTAMPED_KEY:
+        return com.apple.foundationdb.MutationType.SET_VERSIONSTAMPED_KEY;
+      case SET_VERSIONSTAMPED_VALUE:
+        return com.apple.foundationdb.MutationType.SET_VERSIONSTAMPED_VALUE;
+      case BYTE_MIN:
+        return com.apple.foundationdb.MutationType.BYTE_MIN;
+      case BYTE_MAX:
+        return com.apple.foundationdb.MutationType.BYTE_MAX;
+      case COMPARE_AND_CLEAR:
+        return com.apple.foundationdb.MutationType.COMPARE_AND_CLEAR;
+      case UNRECOGNIZED:
+      default:
+        throw Status.INVALID_ARGUMENT.withDescription("unknown mutation type: " + mutationType).
+            asRuntimeException();
+    }
+  }
+
+  private void prepareTx(DatabaseRequest databaseRequest, Context rpcContext, Transaction tx) {
+    setDeadline(rpcContext, tx);
+    if (databaseRequest.getReadVersion() > 0) {
+      tx.setReadVersion(databaseRequest.getReadVersion());
+    }
+    if (databaseRequest.getTransactionOptionsCount() > 0) {
+      for (SetTransactionOptionRequest setTransactionOptionRequest : databaseRequest.getTransactionOptionsList()) {
+        if (setTransactionOptionRequest.hasParam()) {
+          tx.options().getOptionConsumer().setOption(setTransactionOptionRequest.getOption(),
+              setTransactionOptionRequest.getParam().toByteArray());
+        } else {
+          tx.options().getOptionConsumer().setOption(setTransactionOptionRequest.getOption(), null);
+        }
+      }
+    }
+  }
+
+  private void setDeadline(Context rpcContext, Transaction tx) {
     if (rpcContext.getDeadline() != null) {
       long value = rpcContext.getDeadline().timeRemaining(TimeUnit.MILLISECONDS);
       if (value <= 0) {

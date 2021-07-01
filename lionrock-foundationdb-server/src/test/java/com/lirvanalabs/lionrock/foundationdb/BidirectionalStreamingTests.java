@@ -496,7 +496,6 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
       @Override
       public void onError(Throwable t) {
-        fail(t.getMessage());
         latch.countDown();
       }
 
