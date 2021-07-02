@@ -141,7 +141,7 @@ message ClearKeyRangeRequest {
 // and end keys are specified by {@code byte[]} arrays, with the begin
 // key inclusive and the end key exclusive.
 message GetRangeRequest {
-  // in streaming use-cases, the sequence_id is used by the client to identify a
+  // In streaming use-cases, the sequence_id is used by the client to identify a
   // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
   // the beginning of the range (inclusive).
@@ -154,10 +154,9 @@ message GetRangeRequest {
     KeySelector endKeySelector = 4;
     bytes endBytes = 5;
   }
-  // the maximum number of results to return. Limits results to the
-  // <i>first</i> keys in the range. Pass {@link #ROW_LIMIT_UNLIMITED} if this query
-  // should not limit the number of results. If {@code reverse} is {@code true} rows
-  //will be limited starting at the end of the range.
+  // The maximum number of results to return. Limits results to the
+  // <i>first</i> keys in the range. If {@code reverse} is {@code true} rows
+  // will be limited starting at the end of the range.
   int32 limit = 6;
   // return results starting at the end of the range in reverse order.
   bool reverse = 7;
@@ -172,6 +171,8 @@ message GetRangeRequest {
 
 // The response (or a single batch of many) when getting a range of keys.
 message GetRangeResponse {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
   repeated KeyValue keyValues = 2;
   bool done = 3;
@@ -208,11 +209,15 @@ message AddConflictRangeRequest {
 
 // A request to get the current read version.
 message GetReadVersionRequest {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
 }
 
 // A response to getting the read version.
 message GetReadVersionResponse {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
   int64 read_version = 2;
 }
@@ -230,8 +235,12 @@ message SetTransactionOptionRequest {
 
 // The response that's streamed back when a single async operation fails.
 message OperationFailureResponse {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
+  // error code (if available)
   int64 code = 2;
+  // error message (if available)
   string message = 3;
 }
 
