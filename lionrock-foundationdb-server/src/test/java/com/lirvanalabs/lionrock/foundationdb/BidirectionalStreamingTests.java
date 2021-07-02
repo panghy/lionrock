@@ -593,6 +593,67 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     assertTrue(resp.getGetRange().getKeyValuesList().isEmpty());
   }
 
+  @Test
+  void testSetValue_andGetVersionstamp() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamingDatabaseResponse response;
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("testSetValue_andGetVersionstamp").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setSetValue(SetValueRequest.newBuilder().
+            setKey(ByteString.copyFrom("hello".getBytes(StandardCharsets.UTF_8))).
+            setValue(ByteString.copyFrom("world".getBytes(StandardCharsets.UTF_8))).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetVersionstamp(GetVersionstampRequest.newBuilder().
+            setSequenceId(12345).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(2)).onNext(streamingDatabaseResponseCapture.capture());
+
+    response = streamingDatabaseResponseCapture.getAllValues().get(0);
+    boolean gotCommit = false;
+    boolean gotVersionstamp = false;
+    if (response.hasCommitTransaction()) {
+      gotCommit = true;
+    } else if (response.hasGetVersionstamp()) {
+      gotVersionstamp = true;
+      assertEquals(12345, response.getGetVersionstamp().getSequenceId());
+    }
+    response = streamingDatabaseResponseCapture.getAllValues().get(1);
+    if (response.hasCommitTransaction()) {
+      gotCommit = true;
+    } else if (response.hasGetVersionstamp()) {
+      gotVersionstamp = true;
+      assertEquals(12345, response.getGetVersionstamp().getSequenceId());
+    }
+    assertTrue(gotCommit);
+    assertTrue(gotVersionstamp);
+
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    // read the key back.
+    assertEquals("world", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));

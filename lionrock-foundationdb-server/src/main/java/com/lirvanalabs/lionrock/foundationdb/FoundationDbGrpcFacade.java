@@ -313,7 +313,14 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicLong clears = new AtomicLong();
       private final AtomicLong readConflictAdds = new AtomicLong();
       private final AtomicLong writeConflictAdds = new AtomicLong();
+      private final AtomicLong getVersionstamp = new AtomicLong();
       private volatile Transaction tx;
+      /**
+       * {@link CompletableFuture}s chain that is created during the livetime of the transaction but may not resolve
+       * until <i>some</i> time later after the transaction is closed and destroyed. Examples include watches and the
+       * retrieval of the versionstamp after a commit.
+       */
+      private volatile CompletableFuture<?> postCommitFutures = completedFuture(null);
 
       @Override
       public void onNext(StreamingDatabaseRequest value) {
@@ -323,7 +330,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
                   withDescription("cannot send StartTransactionRequest twice").
                   asRuntimeException();
-              responseObserver.onError(toThrow);
+              synchronized (responseObserver) {
+                responseObserver.onError(toThrow);
+              }
               throw toThrow;
             }
             return value.getStartTransaction();
@@ -339,7 +348,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
                 withDescription("cannot find database named: " + startRequest.getDatabaseName()).
                 asRuntimeException();
-            responseObserver.onError(toThrow);
+            synchronized (responseObserver) {
+              responseObserver.onError(toThrow);
+            }
             throw toThrow;
           }
           tx = db.createTransaction();
@@ -351,7 +362,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
         } else if (value.hasCommitTransaction()) {
           if (logger.isDebugEnabled()) {
-            overallSpan.event("CommitTransactionRequest");
+            if (overallSpan != null) {
+              overallSpan.event("CommitTransactionRequest");
+            }
             logger.debug("CommitTransactionRequest");
           }
           hasActiveTransactionOrThrow();
@@ -371,9 +384,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           handleException(tx.commit(), opSpan, responseObserver, "failed to commit transaction").
               thenAccept(x -> {
                 try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setCommitTransaction(CommitTransactionResponse.newBuilder().
-                          setCommittedVersion(tx.getCommittedVersion()).build()).build());
+                  synchronized (responseObserver) {
+                    responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                        setCommitTransaction(CommitTransactionResponse.newBuilder().
+                            setCommittedVersion(tx.getCommittedVersion()).build()).build());
+                  }
                   if (logger.isDebugEnabled()) {
                     String msg = "Committed transaction: " + tx.getCommittedVersion();
                     opSpan.event(msg);
@@ -411,9 +426,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 if (throwable instanceof FDBException) {
                   builder.setCode(((FDBException) throwable).getCode());
                 }
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setOperationFailure(builder.build()).
-                    build());
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetValueRequest on: " +
@@ -428,9 +445,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 if (val != null) {
                   build.setValue(ByteString.copyFrom(val));
                 }
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setGetValue(build.build()).
-                    build());
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetValue(build.build()).
+                      build());
+                }
               }
             } finally {
               opScope.close();
@@ -488,9 +507,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
                   setSequenceId(value.getGetValue().getSequenceId()).
                   setMessage("must have start");
-              responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                  setOperationFailure(builder.build()).
-                  build());
+              synchronized (responseObserver) {
+                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                    setOperationFailure(builder.build()).
+                    build());
+              }
               throw Status.INVALID_ARGUMENT.withDescription("must have start").asRuntimeException();
             }
             KeySelector end;
@@ -503,9 +524,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
                   setSequenceId(value.getGetValue().getSequenceId()).
                   setMessage("must have end");
-              responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                  setOperationFailure(builder.build()).
-                  build());
+              synchronized (responseObserver) {
+                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                    setOperationFailure(builder.build()).
+                    build());
+              }
               throw Status.INVALID_ARGUMENT.withDescription("must have end").asRuntimeException();
             }
             if (logger.isDebugEnabled()) {
@@ -558,9 +581,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                     opSpan.tag("rows_read", String.valueOf(rows.get()));
                     opSpan.tag("batches", String.valueOf(batches.get()));
                     opSpan.end();
-                    responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                        setOperationFailure(builder.build()).
-                        build());
+                    synchronized (responseObserver) {
+                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setOperationFailure(builder.build()).
+                          build());
+                    }
                     return;
                   } else if (!hasNext) {
                     // no more rows to read, flush the last message.
@@ -608,13 +633,15 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   logger.debug(msg);
                   opSpan.event(msg);
                 }
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setGetRange(GetRangeResponse.newBuilder().
-                        setDone(done).
-                        addAllKeyValues(keyValues).
-                        setSequenceId(req.getSequenceId()).
-                        build()).
-                    build());
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetRange(GetRangeResponse.newBuilder().
+                          setDone(done).
+                          addAllKeyValues(keyValues).
+                          setSequenceId(req.getSequenceId()).
+                          build()).
+                      build());
+                }
                 keyValues.clear();
               }
             };
@@ -665,7 +692,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             if (overallSpan != null) {
               overallSpan.event("GetReadVersion");
             }
-          }// start the span/scope for the get_value call.
+          }
+          // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_read_version");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
           tx.getReadVersion().whenComplete((val, throwable) -> {
@@ -678,9 +706,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 if (throwable instanceof FDBException) {
                   builder.setCode(((FDBException) throwable).getCode());
                 }
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setOperationFailure(builder.build()).
-                    build());
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetReadVersion is: " + val;
@@ -741,15 +771,74 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           tx.mutate(getMutationType(value.getMutateValue().getType()),
               value.getMutateValue().getKey().toByteArray(),
               value.getMutateValue().getParam().toByteArray());
+        } else if (value.hasGetVersionstamp()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            String msg = "GetVersionstampRequest";
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }// start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_versionstamp");
+          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+          getVersionstamp.incrementAndGet();
+          chainPostCommitFuture(tx.getVersionstamp().whenComplete((vs, throwable) -> {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable, () -> "failed to get versionstamp");
+                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                    setSequenceId(value.getGetVersionstamp().getSequenceId()).
+                    setMessage(throwable.getMessage());
+                if (throwable instanceof FDBException) {
+                  builder.setCode(((FDBException) throwable).getCode());
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
+              } else {
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetVersionstampRequest is: " + printable(vs);
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetVersionstamp(GetVersionstampResponse.newBuilder().
+                          setSequenceId(value.getGetVersionstamp().getSequenceId()).
+                          setVersionstamp(ByteString.copyFrom(vs)).build()).
+                      build());
+                }
+              }
+            } finally {
+              opScope.close();
+              opSpan.end();
+            }
+          }));
+        }
+      }
+
+      private void chainPostCommitFuture(CompletableFuture<byte[]> postCommitFuture) {
+        CompletableFuture<?> existingFuture = this.postCommitFutures;
+        // eat the exception from this future and compose it with the existing chain.
+        CompletableFuture<?> postCommitFutures = postCommitFuture.
+            exceptionally(x -> null).
+            thenCompose(x -> existingFuture);
+        synchronized (this) {
+          this.postCommitFutures = postCommitFutures;
         }
       }
 
       private void hasActiveTransactionOrThrow() {
-        if (tx == null) {
+        if (tx == null && !commitStarted.get()) {
           StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
               withDescription("must have an active transaction").
               asRuntimeException();
-          responseObserver.onError(toThrow);
+          synchronized (responseObserver) {
+            responseObserver.onError(toThrow);
+          }
           throw toThrow;
         }
       }
@@ -765,47 +854,53 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
       @Override
       public void onCompleted() {
-        // close the transaction if active (in-flight futures will be cancelled if the client calls this).
-        // TODO: for watches, we might need to keep the channel open forever? perhaps then the client would just not
-        //  close the connection?
-        if (tx != null) {
-          if (!commitStarted.get()) {
-            tx.cancel();
+        // we only close the server-side connection when all post commit futures are resolved (whether success or
+        // failures).
+        postCommitFutures.whenComplete((ignored, throwable) -> {
+          if (tx != null) {
+            if (!commitStarted.get()) {
+              tx.cancel();
+            }
+            tx.close();
           }
-          tx.close();
-        }
-        if (overallSpan != null) {
-          if (rowsRead.get() > 0) {
-            overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
+          if (overallSpan != null) {
+            if (rowsRead.get() > 0) {
+              overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
+            }
+            if (rangeGetBatches.get() > 0) {
+              overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
+            }
+            if (rowsWritten.get() > 0) {
+              overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
+            }
+            if (clears.get() > 0) {
+              overallSpan.tag("clears", String.valueOf(clears.get()));
+            }
+            if (getReadVersion.get() > 0) {
+              overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
+            }
+            if (readConflictAdds.get() > 0) {
+              overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
+            }
+            if (writeConflictAdds.get() > 0) {
+              overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
+            }
+            if (rowsMutated.get() > 0) {
+              overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
+            }
+            if (getVersionstamp.get() > 0) {
+              overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
+            }
           }
-          if (rangeGetBatches.get() > 0) {
-            overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
+          // close the connection after all post commits are done.
+          try {
+            synchronized (this) {
+              responseObserver.onCompleted();
+            }
+          } catch (IllegalStateException ex) {
+            // ignored.
           }
-          if (rowsWritten.get() > 0) {
-            overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
-          }
-          if (clears.get() > 0) {
-            overallSpan.tag("clears", String.valueOf(clears.get()));
-          }
-          if (getReadVersion.get() > 0) {
-            overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
-          }
-          if (readConflictAdds.get() > 0) {
-            overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
-          }
-          if (writeConflictAdds.get() > 0) {
-            overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
-          }
-          if (rowsMutated.get() > 0) {
-            overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
-          }
-        }
-        // when the client closes the connection, we also close the connection to it.
-        try {
-          responseObserver.onCompleted();
-        } catch (IllegalStateException ex) {
-          // ignored.
-        }
+        });
       }
     };
   }
@@ -875,10 +970,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
   private void handleCommittedTransaction(CompletableFuture<Transaction> input,
                                           StreamObserver<DatabaseResponse> responseObserver) {
     input.thenAccept(x -> {
-      responseObserver.onNext(DatabaseResponse.newBuilder().
-          setCommittedTransaction(CommitTransactionResponse.newBuilder().build()).
-          build());
-      responseObserver.onCompleted();
+      synchronized (responseObserver) {
+        responseObserver.onNext(DatabaseResponse.newBuilder().
+            setCommittedTransaction(CommitTransactionResponse.newBuilder().build()).
+            build());
+        responseObserver.onCompleted();
+      }
     });
   }
 
@@ -916,10 +1013,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       if (throwable != null) {
         try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
           Metadata exceptionMetadata = handleThrowable(overallSpan, throwable, failureMessage);
-          responseObserver.onError(Status.ABORTED.
-              withCause(throwable).
-              withDescription(throwable.getMessage()).
-              asRuntimeException(exceptionMetadata));
+          synchronized (responseObserver) {
+            responseObserver.onError(Status.ABORTED.
+                withCause(throwable).
+                withDescription(throwable.getMessage()).
+                asRuntimeException(exceptionMetadata));
+          }
         }
       }
     });
