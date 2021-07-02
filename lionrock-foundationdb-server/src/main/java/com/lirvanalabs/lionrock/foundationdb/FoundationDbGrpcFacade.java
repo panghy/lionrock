@@ -817,17 +817,64 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               opSpan.end();
             }
           }));
+        } else if (value.hasWatchKey()) {
+          hasActiveTransactionOrThrow();
+          if (logger.isDebugEnabled()) {
+            String msg = "WatchKeyRequest for: " + printable(value.getWatchKey().getKey().toByteArray());
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }// start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.watch_key");
+          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+          getVersionstamp.incrementAndGet();
+          chainPostCommitFuture(tx.watch(value.getWatchKey().getKey().toByteArray()).
+              whenComplete((vs, throwable) -> {
+                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+                  if (throwable != null) {
+                    handleThrowable(opSpan, throwable, () -> "failed to watch key");
+                    OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                        setSequenceId(value.getWatchKey().getSequenceId()).
+                        setMessage(throwable.getMessage());
+                    if (throwable instanceof FDBException) {
+                      builder.setCode(((FDBException) throwable).getCode());
+                    }
+                    synchronized (responseObserver) {
+                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setOperationFailure(builder.build()).
+                          build());
+                    }
+                  } else {
+                    if (logger.isDebugEnabled()) {
+                      String msg = "WatchKeyRequest Completed for: " +
+                          printable(value.getWatchKey().getKey().toByteArray());
+                      logger.debug(msg);
+                      opSpan.event(msg);
+                    }
+                    synchronized (responseObserver) {
+                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setWatchKey(WatchKeyResponse.newBuilder().
+                              setSequenceId(value.getWatchKey().getSequenceId()).build()).
+                          build());
+                    }
+                  }
+                } finally {
+                  opScope.close();
+                  opSpan.end();
+                }
+              }));
         }
       }
 
-      private void chainPostCommitFuture(CompletableFuture<byte[]> postCommitFuture) {
+      private void chainPostCommitFuture(CompletableFuture<?> postCommitFuture) {
+        // we must reference the existing future here (and not in the lambda).
         CompletableFuture<?> existingFuture = this.postCommitFutures;
-        // eat the exception from this future and compose it with the existing chain.
-        CompletableFuture<?> postCommitFutures = postCommitFuture.
-            exceptionally(x -> null).
-            thenCompose(x -> existingFuture);
         synchronized (this) {
-          this.postCommitFutures = postCommitFutures;
+          // eat the exception from this future and compose it with the existing chain.
+          this.postCommitFutures = postCommitFuture.
+              exceptionally(x -> null).
+              thenCompose(x -> existingFuture);
         }
       }
 

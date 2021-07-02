@@ -59,6 +59,7 @@ message StreamingDatabaseRequest {
     SetTransactionOptionRequest set_transaction_option = 12;
     MutateValueRequest mutate_value = 13;
     GetVersionstampRequest get_versionstamp = 14;
+    WatchKeyRequest watch_key = 15;
   }
 }
 
@@ -72,6 +73,7 @@ message StreamingDatabaseResponse {
     GetRangeResponse get_range = 5;
     GetReadVersionResponse get_read_version = 6;
     GetVersionstampResponse get_versionstamp = 7;
+    WatchKeyResponse watch_key = 8;
   }
 }
 
@@ -249,6 +251,21 @@ message GetVersionstampResponse {
   int64 sequence_id = 1;
   // The versionstamp after a commit.
   bytes versionstamp = 2;
+}
+
+// The request to watch a key for changes.
+message WatchKeyRequest {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  bytes key = 2;
+}
+
+// The response when a key changes after a transaction is committed.
+message WatchKeyResponse {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
 }
 
 // The response that's streamed back when a single async operation fails.
