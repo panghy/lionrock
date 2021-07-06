@@ -1,7 +1,7 @@
 syntax = "proto3";
 import "google/protobuf/empty.proto";
 
-option java_package = "com.lirvanalabs.lionrock.proto";
+option java_package = "io.github.panghy.lionrock.proto";
 option java_multiple_files = true;
 
 // A transactional, key-value store as a gRPC service.

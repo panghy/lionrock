@@ -13,7 +13,7 @@ spring:
 logging:
   level:
     root: INFO
-    com.lirvanalabs.lionrock: DEBUG
+    io.github.panghy.lionrock: DEBUG
 
 # Below are Wavefront reporting specific entries (need API-token and URL to really work).
 management:

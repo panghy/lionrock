@@ -1,4 +1,4 @@
-package com.lirvanalabs.lionrock.foundationdb;
+package io.github.panghy.lionrock.foundationdb;
 
 import com.apple.foundationdb.KeySelector;
 import com.apple.foundationdb.KeyValue;
@@ -7,8 +7,8 @@ import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
 import com.apple.foundationdb.async.AsyncIterator;
 import com.google.protobuf.ByteString;
-import com.lirvanalabs.lionrock.proto.MutationType;
-import com.lirvanalabs.lionrock.proto.*;
+import io.github.panghy.lionrock.proto.MutationType;
+import io.github.panghy.lionrock.proto.*;
 import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.Status;
@@ -254,9 +254,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (overallSpan != null) {
             overallSpan.tag("rows", String.valueOf(results.size()));
           }
-          List<com.lirvanalabs.lionrock.proto.KeyValue> keyValues = new ArrayList<>(results.size());
+          List<io.github.panghy.lionrock.proto.KeyValue> keyValues = new ArrayList<>(results.size());
           for (KeyValue result : results) {
-            keyValues.add(com.lirvanalabs.lionrock.proto.KeyValue.newBuilder().
+            keyValues.add(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
                 setKey(ByteString.copyFrom(result.getKey())).
                 setValue(ByteString.copyFrom(result.getValue())).build());
           }
@@ -561,7 +561,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             AtomicLong batches = new AtomicLong();
             BiConsumer<Boolean, Throwable> hasNextConsumer = new BiConsumer<>() {
 
-              private final List<com.lirvanalabs.lionrock.proto.KeyValue> keyValues = new ArrayList<>();
+              private final List<io.github.panghy.lionrock.proto.KeyValue> keyValues = new ArrayList<>();
 
               @Override
               public void accept(Boolean hasNext, Throwable throwable) {
@@ -601,7 +601,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                       KeyValue next = iterator.next();
                       rows.incrementAndGet();
                       synchronized (keyValues) {
-                        keyValues.add(com.lirvanalabs.lionrock.proto.KeyValue.newBuilder().
+                        keyValues.add(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
                             setKey(ByteString.copyFrom(next.getKey())).
                             setValue(ByteString.copyFrom(next.getValue())).
                             build());

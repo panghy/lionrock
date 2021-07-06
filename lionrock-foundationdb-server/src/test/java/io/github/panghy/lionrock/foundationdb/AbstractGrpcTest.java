@@ -1,9 +1,9 @@
-package com.lirvanalabs.lionrock.foundationdb;
+package io.github.panghy.lionrock.foundationdb;
 
 import com.google.protobuf.ByteString;
-import com.lirvanalabs.lionrock.proto.DatabaseResponse;
-import com.lirvanalabs.lionrock.proto.KeySelector;
-import com.lirvanalabs.lionrock.proto.StreamingDatabaseResponse;
+import io.github.panghy.lionrock.proto.DatabaseResponse;
+import io.github.panghy.lionrock.proto.KeySelector;
+import io.github.panghy.lionrock.proto.StreamingDatabaseResponse;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;

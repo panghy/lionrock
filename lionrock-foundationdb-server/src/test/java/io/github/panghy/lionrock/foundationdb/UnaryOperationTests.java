@@ -1,7 +1,7 @@
-package com.lirvanalabs.lionrock.foundationdb;
+package io.github.panghy.lionrock.foundationdb;
 
 import com.google.protobuf.ByteString;
-import com.lirvanalabs.lionrock.proto.*;
+import io.github.panghy.lionrock.proto.*;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
