@@ -13,7 +13,8 @@ plugins {
     id 'maven-publish'
 }
 
-group 'com.lirvanalabs'
+group 'io.github.panghy'
+artifact 'lionrock-proto-java'
 version '0.0.1-SNAPSHOT'
 sourceCompatibility = '11'
 
