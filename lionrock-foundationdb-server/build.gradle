@@ -3,6 +3,7 @@ plugins {
     id 'io.spring.dependency-management' version '1.0.11.RELEASE'
     id 'java'
     id 'maven-publish'
+    id 'jacoco'
 }
 
 group 'io.github.panghy.lionrock'
@@ -52,6 +53,7 @@ dependencyManagement {
 
 test {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport // report is always generated after tests run
 }
 
 publishing {
@@ -69,5 +71,12 @@ publishing {
                 password = System.getenv("GITHUB_TOKEN")
             }
         }
+    }
+}
+
+jacocoTestReport {
+    dependsOn test // tests are required to run before generating the report
+    reports {
+        csv.required = true
     }
 }
