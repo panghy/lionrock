@@ -20,11 +20,23 @@ jobs:
       - name: download fdb-client
         run: wget https://www.foundationdb.org/downloads/6.2.15/ubuntu/installers/foundationdb-clients_6.2.15-1_amd64.deb
 
+      - name: download fdb-server
+        run: wget https://www.foundationdb.org/downloads/6.2.15/ubuntu/installers/foundationdb-server_6.2.15-1_amd64.deb
+
       - name: install fdb-client
         run: sudo dpkg -i foundationdb-clients_6.2.15-1_amd64.deb
 
+      - name: install fdb-server
+        run: sudo dpkg -i foundationdb-server_6.2.15-1_amd64.deb
+
       - name: remote fdb-client
         run: rm foundationdb-clients_6.2.15-1_amd64.deb
+
+      - name: remote fdb-server
+        run: rm foundationdb-server_6.2.15-1_amd64.deb
+
+      - name: setup foundationdb cluster
+        run: fdbcli --exec configure new single memory
 
       - name: Set up JDK 11
         uses: actions/setup-java@v1
