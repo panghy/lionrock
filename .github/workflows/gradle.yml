@@ -38,7 +38,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew build -x test
+        run: ./gradlew build -x test --no-daemon
 
       - uses: actions/upload-artifact@v2
         with:
@@ -100,7 +100,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Test with Gradle
-        run: ./gradlew test
+        run: ./gradlew test --no-daemon
 
       - name: Generate JaCoCo Badge
         id: jacoco
@@ -164,7 +164,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Publish Snapshots with Gradle
-        run: ./gradlew publish
+        run: ./gradlew publish --no-daemon
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
