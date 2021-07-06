@@ -1,4 +1,4 @@
-rootProject.name = 'lionrock'
+rootProject.name = 'io.github.panghy.lionrock'
 include 'lionrock-proto-java'
 include 'lionrock-foundationdb-server'
 
