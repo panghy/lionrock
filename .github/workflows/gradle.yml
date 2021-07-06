@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v2
@@ -61,7 +61,8 @@ jobs:
         run: ./gradlew build
 
       - name: Generate JaCoCo Badge
-        uses: cicirello/jacoco-badge-generator@v2
+        id: jacoco
+        uses: cicirello/jacoco-badge-generator@v2.1.0
         with:
           generate-branches-badge: true
           jacoco-csv-file: >
