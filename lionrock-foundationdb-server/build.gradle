@@ -34,7 +34,6 @@ dependencies {
     implementation project(':lionrock-proto-java')
     implementation 'org.foundationdb:fdb-java:6.2.22'
 
-    testImplementation 'org.testcontainers:testcontainers:1.15.3'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
