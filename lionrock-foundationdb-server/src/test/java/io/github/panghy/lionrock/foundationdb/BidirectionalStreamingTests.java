@@ -654,6 +654,58 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     assertEquals("world", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
   }
 
+
+  @Test
+  public void testGetKey_keyselectorStart_firstGreaterThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    setupRangeTest(stub);
+
+    // firstAfter hello
+    byte[] result = getKey(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 1, true));
+    assertArrayEquals("hello1".getBytes(StandardCharsets.UTF_8), result);
+  }
+
+  @Test
+  public void testGetKey_keyselectorStart_firstGreaterThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    // firstAfterOrEqual to Hello
+    byte[] result = getKey(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 1, false));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+  }
+
+  @Test
+  public void testGetKey_keyselectorStart_lastLessThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    // lastLessThanOrEqual "hello"
+    byte[] result = getKey(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 0, true));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+    // lastLessThanOrEqual hello0 which is hello.
+    result = getKey(stub, keySelector("hello0".getBytes(StandardCharsets.UTF_8), 0, true));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+  }
+
+  @Test
+  public void testGetKey_keyselectorStart_lastLessThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    // lastLessThan hello0 which is hello.
+    byte[] result = getKey(stub, keySelector("hello0".getBytes(StandardCharsets.UTF_8), 0, false));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+    // lastLessThan hello1 which is hello.
+    result = getKey(stub, keySelector("hello1".getBytes(StandardCharsets.UTF_8), 0, false));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));

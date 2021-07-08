@@ -6,11 +6,39 @@ import io.grpc.stub.StreamObserver;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
+
+  byte[] getKey(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, KeySelector keySelector) {
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("getRange").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetKey(GetKeyRequest.newBuilder().
+            setKeySelector(keySelector).
+            build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
+    assertTrue(value.hasGetKey());
+    return value.getGetKey().hasKey() ? value.getGetKey().getKey().toByteArray() : null;
+  }
 
   List<KeyValue> getRange(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
                           KeySelector start, KeySelector end, int limit, boolean reverse) {
@@ -68,10 +96,22 @@ public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
             build()).
         build());
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetApproximateSize(GetApproximateSizeRequest.newBuilder().setSequenceId(123).build()).
+        build());
+
+    // check approximate size.
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    response = streamingDatabaseResponseCapture.getValue();
+    assertTrue(response.hasGetApproximateSize());
+    assertTrue(response.getGetApproximateSize().getSize() > 0);
+    assertEquals(123, response.getGetApproximateSize().getSequenceId());
+
+    // commit.
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
 
-    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(2)).onNext(streamingDatabaseResponseCapture.capture());
     serverStub.onCompleted();
     verify(streamObs, timeout(5000).times(1)).onCompleted();
     verify(streamObs, never()).onError(any());

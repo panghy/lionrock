@@ -362,6 +362,57 @@ class UnaryOperationTests extends AbstractGrpcTest {
     verify(streamObs, timeout(5000).times(1)).onError(any());
   }
 
+  @Test
+  public void testGetKey_keyselectorStart_firstGreaterThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    setupRangeTest(stub);
+
+    // firstAfter hello
+    byte[] result = getKey(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 1, true));
+    assertArrayEquals("hello1".getBytes(StandardCharsets.UTF_8), result);
+  }
+
+  @Test
+  public void testGetKey_keyselectorStart_firstGreaterThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    // firstAfterOrEqual to Hello
+    byte[] result = getKey(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 1, false));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+  }
+
+  @Test
+  public void testGetKey_keyselectorStart_lastLessThanOrEqual() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    // lastLessThanOrEqual "hello"
+    byte[] result = getKey(stub, keySelector("hello".getBytes(StandardCharsets.UTF_8), 0, true));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+    // lastLessThanOrEqual hello0 which is hello.
+    result = getKey(stub, keySelector("hello0".getBytes(StandardCharsets.UTF_8), 0, true));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+  }
+
+  @Test
+  public void testGetKey_keyselectorStart_lastLessThan() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    // lastLessThan hello0 which is hello.
+    byte[] result = getKey(stub, keySelector("hello0".getBytes(StandardCharsets.UTF_8), 0, false));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+    // lastLessThan hello1 which is hello.
+    result = getKey(stub, keySelector("hello1".getBytes(StandardCharsets.UTF_8), 0, false));
+    assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
@@ -372,6 +423,22 @@ class UnaryOperationTests extends AbstractGrpcTest {
     setKeyAndCommit(stub, "hello2".getBytes(StandardCharsets.UTF_8), worldB);
     setKeyAndCommit(stub, "hello3".getBytes(StandardCharsets.UTF_8), worldB);
     return worldB;
+  }
+
+  private byte[] getKey(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, KeySelector keySelector) {
+    StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
+    stub.execute(DatabaseRequest.newBuilder().
+        setDatabaseName("fdb").setName("getKey").setClientIdentifier("unit test").
+        setGetKey(GetKeyRequest.newBuilder().setKeySelector(keySelector).build()).
+        build(), streamObs);
+
+    verify(streamObs, timeout(5000).times(1)).onNext(databaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    DatabaseResponse value = databaseResponseCapture.getValue();
+    assertTrue(value.hasGetKey());
+    return value.getGetKey().hasKey() ? value.getGetKey().getKey().toByteArray() : null;
   }
 
   private List<KeyValue> getRange(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,

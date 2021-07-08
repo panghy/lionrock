@@ -128,6 +128,42 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           responseObserver.onCompleted();
         }
       });
+    } else if (request.hasGetKey()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "get_key");
+      }
+      io.github.panghy.lionrock.proto.KeySelector ks = request.getGetKey().getKeySelector();
+      KeySelector keySelector = new KeySelector(ks.getKey().toByteArray(), ks.getOrEqual(), ks.getOffset());
+      if (logger.isDebugEnabled()) {
+        String msg = "GetKey for: " + keySelector;
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
+      }
+      handleException(db.runAsync(tx -> {
+        prepareTx(request, rpcContext, tx);
+        return tx.getKey(keySelector);
+      }), overallSpan, responseObserver, "failed to get key").thenAccept(val -> {
+        try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
+          GetKeyResponse.Builder build = GetKeyResponse.newBuilder();
+          if (logger.isDebugEnabled()) {
+            String msg = "GetKey on: " +
+                keySelector + " is: " + printable(val);
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (val != null) {
+            build.setKey(ByteString.copyFrom(val));
+          }
+          responseObserver.onNext(DatabaseResponse.newBuilder().
+              setGetKey(build.build()).
+              build());
+          responseObserver.onCompleted();
+        }
+      });
     } else if (request.hasSetValue()) {
       if (overallSpan != null) {
         overallSpan.tag("request", "set_value");
@@ -307,6 +343,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicLong rowsWritten = new AtomicLong();
       private final AtomicLong rowsMutated = new AtomicLong();
       private final AtomicLong rowsRead = new AtomicLong();
+      private final AtomicLong keysRead = new AtomicLong();
       private final AtomicLong getReadVersion = new AtomicLong();
       private final AtomicLong rangeGets = new AtomicLong();
       private final AtomicLong rangeGetBatches = new AtomicLong();
@@ -314,6 +351,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicLong readConflictAdds = new AtomicLong();
       private final AtomicLong writeConflictAdds = new AtomicLong();
       private final AtomicLong getVersionstamp = new AtomicLong();
+      private final AtomicLong getApproximateSize = new AtomicLong();
       private volatile Transaction tx;
       /**
        * {@link CompletableFuture}s chain that is created during the livetime of the transaction but may not resolve
@@ -456,6 +494,64 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               opSpan.end();
             }
           });
+        } else if (value.hasGetKey()) {
+          io.github.panghy.lionrock.proto.KeySelector ks = value.getGetKey().getKeySelector();
+          KeySelector keySelector = new KeySelector(ks.getKey().toByteArray(), ks.getOrEqual(), ks.getOffset());
+          if (logger.isDebugEnabled()) {
+            String msg = "GetKey for: " + keySelector;
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          hasActiveTransactionOrThrow();
+          // start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_key");
+          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+          GetValueRequest getValueRequest = value.getGetValue();
+          CompletableFuture<byte[]> getFuture = getValueRequest.getSnapshot() ?
+              tx.snapshot().getKey(keySelector) :
+              tx.getKey(keySelector);
+          getFuture.whenComplete((val, throwable) -> {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable,
+                    () -> "failed to get key: " + keySelector);
+                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                    setSequenceId(value.getGetKey().getSequenceId()).
+                    setMessage(throwable.getMessage());
+                if (throwable instanceof FDBException) {
+                  builder.setCode(((FDBException) throwable).getCode());
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
+              } else {
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetKey on: " +
+                      keySelector + " is: " + printable(val);
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                keysRead.incrementAndGet();
+                GetKeyResponse.Builder build = GetKeyResponse.newBuilder().
+                    setSequenceId(value.getGetKey().getSequenceId());
+                if (val != null) {
+                  build.setKey(ByteString.copyFrom(val));
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetKey(build.build()).
+                      build());
+                }
+              }
+            } finally {
+              opScope.close();
+              opSpan.end();
+            }
+          });
         } else if (value.hasSetValue()) {
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
@@ -500,36 +596,16 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             KeySelector start;
             if (req.hasStartBytes()) {
               start = new KeySelector(req.getStartBytes().toByteArray(), false, 1);
-            } else if (req.hasStartKeySelector()) {
+            } else {
               start = new KeySelector(req.getStartKeySelector().getKey().toByteArray(),
                   req.getStartKeySelector().getOrEqual(), req.getStartKeySelector().getOffset());
-            } else {
-              OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                  setSequenceId(value.getGetValue().getSequenceId()).
-                  setMessage("must have start");
-              synchronized (responseObserver) {
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setOperationFailure(builder.build()).
-                    build());
-              }
-              throw Status.INVALID_ARGUMENT.withDescription("must have start").asRuntimeException();
             }
             KeySelector end;
             if (req.hasEndBytes()) {
               end = new KeySelector(req.getEndBytes().toByteArray(), false, 1);
-            } else if (req.hasEndKeySelector()) {
+            } else {
               end = new KeySelector(req.getEndKeySelector().getKey().toByteArray(),
                   req.getEndKeySelector().getOrEqual(), req.getEndKeySelector().getOffset());
-            } else {
-              OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                  setSequenceId(value.getGetValue().getSequenceId()).
-                  setMessage("must have end");
-              synchronized (responseObserver) {
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setOperationFailure(builder.build()).
-                    build());
-              }
-              throw Status.INVALID_ARGUMENT.withDescription("must have end").asRuntimeException();
             }
             if (logger.isDebugEnabled()) {
               String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
@@ -864,6 +940,57 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   opSpan.end();
                 }
               }));
+        } else if (value.hasGetApproximateSize()) {
+          if (logger.isDebugEnabled()) {
+            String msg = "GetApproximateSizeRequest";
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+            logger.debug(msg);
+          }
+          hasActiveTransactionOrThrow();
+          // start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_approximate_size");
+          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+          getApproximateSize.incrementAndGet();
+          tx.getApproximateSize().whenComplete((val, throwable) -> {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable,
+                    () -> "failed to get approximate size");
+                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                    setSequenceId(value.getGetApproximateSize().getSequenceId()).
+                    setMessage(throwable.getMessage());
+                if (throwable instanceof FDBException) {
+                  builder.setCode(((FDBException) throwable).getCode());
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
+              } else {
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetApproximateSize is: " + val;
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                GetApproximateSizeResponse.Builder build = GetApproximateSizeResponse.newBuilder().
+                    setSequenceId(value.getGetApproximateSize().getSequenceId());
+                if (val != null) {
+                  build.setSize(val);
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetApproximateSize(build.build()).
+                      build());
+                }
+              }
+            } finally {
+              opScope.close();
+              opSpan.end();
+            }
+          });
         }
       }
 
@@ -939,6 +1066,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               }
               if (getVersionstamp.get() > 0) {
                 overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
+              }
+              if (keysRead.get() > 0) {
+                overallSpan.tag("keys_read", String.valueOf(keysRead.get()));
+              }
+              if (getApproximateSize.get() > 0) {
+                overallSpan.tag("get_approximate_size", String.valueOf(getApproximateSize.get()));
               }
             }
             // close the connection after all post commits are done.
