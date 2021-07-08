@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.client.foundationdb;
+package io.github.panghy.lionrock.client.foundationdb.impl.collections;
 
 import com.apple.foundationdb.FDBException;
 import com.google.protobuf.ByteString;

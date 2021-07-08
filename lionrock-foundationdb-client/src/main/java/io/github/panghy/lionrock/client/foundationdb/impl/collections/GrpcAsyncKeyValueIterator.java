@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.client.foundationdb;
+package io.github.panghy.lionrock.client.foundationdb.impl.collections;
 
 import com.apple.foundationdb.FDBException;
 import com.apple.foundationdb.KeyValue;
@@ -63,7 +63,10 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
   }
 
   void accept(OperationFailureResponse failure) {
-    onHasNextFuture.completeExceptionally(new FDBException(failure.getMessage(), (int) failure.getCode()));
+    FDBException ex = new FDBException(failure.getMessage(), (int) failure.getCode());
+    if (!onHasNextFuture.completeExceptionally(ex)) {
+      onHasNextFuture = CompletableFuture.failedFuture(ex);
+    }
   }
 
   @Override
@@ -74,7 +77,8 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
     if (!responses.isEmpty()) {
       // has keys pending to be iterated.
       return AsyncUtil.READY_TRUE;
-    } else if (onHasNextFuture != null && !onHasNextFuture.isDone()) {
+    } else if (onHasNextFuture != null &&
+        (!onHasNextFuture.isDone() || onHasNextFuture.isCompletedExceptionally())) {
       // already has a future and it isn't done.
       return onHasNextFuture;
     } else if (done) {
