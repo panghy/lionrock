@@ -904,48 +904,51 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         // we only close the server-side connection when all post commit futures are resolved (whether success or
         // failures).
         postCommitFutures.whenComplete((ignored, throwable) -> {
-          if (tx != null) {
-            if (!commitStarted.get()) {
-              tx.cancel();
-            }
-            tx.close();
-          }
-          if (overallSpan != null) {
-            if (rowsRead.get() > 0) {
-              overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
-            }
-            if (rangeGetBatches.get() > 0) {
-              overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
-            }
-            if (rowsWritten.get() > 0) {
-              overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
-            }
-            if (clears.get() > 0) {
-              overallSpan.tag("clears", String.valueOf(clears.get()));
-            }
-            if (getReadVersion.get() > 0) {
-              overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
-            }
-            if (readConflictAdds.get() > 0) {
-              overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
-            }
-            if (writeConflictAdds.get() > 0) {
-              overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
-            }
-            if (rowsMutated.get() > 0) {
-              overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
-            }
-            if (getVersionstamp.get() > 0) {
-              overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
-            }
-          }
-          // close the connection after all post commits are done.
           try {
-            synchronized (this) {
-              responseObserver.onCompleted();
+            if (tx != null) {
+              if (!commitStarted.get()) {
+                tx.cancel();
+              }
+              tx.close();
             }
-          } catch (IllegalStateException ex) {
-            // ignored.
+          } finally {
+            if (overallSpan != null) {
+              if (rowsRead.get() > 0) {
+                overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
+              }
+              if (rangeGetBatches.get() > 0) {
+                overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
+              }
+              if (rowsWritten.get() > 0) {
+                overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
+              }
+              if (clears.get() > 0) {
+                overallSpan.tag("clears", String.valueOf(clears.get()));
+              }
+              if (getReadVersion.get() > 0) {
+                overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
+              }
+              if (readConflictAdds.get() > 0) {
+                overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
+              }
+              if (writeConflictAdds.get() > 0) {
+                overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
+              }
+              if (rowsMutated.get() > 0) {
+                overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
+              }
+              if (getVersionstamp.get() > 0) {
+                overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
+              }
+            }
+            // close the connection after all post commits are done.
+            try {
+              synchronized (this) {
+                responseObserver.onCompleted();
+              }
+            } catch (IllegalStateException ex) {
+              // ignored.
+            }
           }
         });
       }
