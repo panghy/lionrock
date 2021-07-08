@@ -109,6 +109,7 @@ jobs:
           generate-branches-badge: true
           jacoco-csv-file: >
             lionrock-foundationdb-server/build/reports/jacoco/test/jacocoTestReport.csv
+            lionrock-foundationdb-client/build/reports/jacoco/test/jacocoTestReport.csv
 
       - name: Log coverage percentage
         run: |
