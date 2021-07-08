@@ -1,0 +1,67 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+}
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'org.springframework.boot' version '2.5.2'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+}
+
+ext {
+    set('springCloudVersion', "2020.0.3")
+    set('wavefrontVersion', "2.2.0")
+}
+
+group 'io.github.panghy.lionrock'
+version '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+repositories {
+    mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        mavenBom "com.wavefront:wavefront-spring-boot-bom:${wavefrontVersion}"
+    }
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+    implementation project(':lionrock-proto-java')
+    implementation 'org.foundationdb:fdb-java:6.2.22'
+    implementation 'io.grpc:grpc-stub:1.38.0'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.17.3'
+
+    testImplementation project(':lionrock-foundationdb-server')
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.9.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = "https://maven.pkg.github.com/panghy/lionrock"
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}

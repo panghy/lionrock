@@ -66,14 +66,13 @@ message StreamingDatabaseRequest {
 // The response message from a client to a database when streaming.
 message StreamingDatabaseResponse {
   oneof response {
-    EndTransactionResponse end_transaction = 1;
-    CommitTransactionResponse commit_transaction = 2;
-    OperationFailureResponse operation_failure = 3;
-    GetValueResponse get_value = 4;
-    GetRangeResponse get_range = 5;
-    GetReadVersionResponse get_read_version = 6;
-    GetVersionstampResponse get_versionstamp = 7;
-    WatchKeyResponse watch_key = 8;
+    CommitTransactionResponse commit_transaction = 1;
+    OperationFailureResponse operation_failure = 2;
+    GetValueResponse get_value = 3;
+    GetRangeResponse get_range = 4;
+    GetReadVersionResponse get_read_version = 5;
+    GetVersionstampResponse get_versionstamp = 6;
+    WatchKeyResponse watch_key = 7;
   }
 }
 
@@ -86,13 +85,6 @@ message StartTransactionRequest {
 
 // The request to commit the ongoing transaction.
 message CommitTransactionRequest {
-}
-
-// The response message when a transaction is successfully committed. Errors are handled via gRPC errors.
-message EndTransactionResponse {
-  string message = 1;
-  int32 code = 2;
-  int64 server_time_ms = 3;
 }
 
 // The last response of a transaction request. Indicates successfully committing the transaction.
