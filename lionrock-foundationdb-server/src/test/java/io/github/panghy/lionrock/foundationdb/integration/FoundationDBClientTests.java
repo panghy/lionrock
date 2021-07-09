@@ -5,6 +5,10 @@ import com.apple.foundationdb.tuple.Tuple;
 import com.apple.foundationdb.tuple.Versionstamp;
 import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
 import io.github.panghy.lionrock.foundationdb.AbstractGrpcTest;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -19,6 +23,8 @@ public class FoundationDBClientTests extends AbstractGrpcTest {
   private static final byte[] HELLO_B = "hello".getBytes(StandardCharsets.UTF_8);
   private static final byte[] WORLD_B = "world".getBytes(StandardCharsets.UTF_8);
   private static final CompletableFuture<?> DONE = CompletableFuture.completedFuture(null);
+
+  private static ManagedChannel channel;
 
   @Test
   public void testGetReadVersion() {
@@ -342,7 +348,18 @@ public class FoundationDBClientTests extends AbstractGrpcTest {
   }
 
   private Database getDb() {
-    return RemoteFoundationDBDatabaseFactory.openPlainText("localhost", getPort(),
-        "fdb", "integration test");
+    return RemoteFoundationDBDatabaseFactory.open("fdb", "integration test", channel);
+  }
+
+  @BeforeEach
+  public void setupChannel() {
+    channel = ManagedChannelBuilder.forAddress("localhost", getPort()).
+        usePlaintext().
+        build();
+  }
+
+  @AfterEach
+  public void shutdownChannel() {
+    channel.shutdownNow();
   }
 }
