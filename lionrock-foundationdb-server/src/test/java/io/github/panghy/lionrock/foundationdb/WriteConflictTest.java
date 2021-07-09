@@ -40,7 +40,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
             setEndBytes(ByteString.copyFrom("hello4", StandardCharsets.UTF_8)).build()).
         build());
     // expected to receive no rows.
-    verify(tx1Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx1Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     StreamingDatabaseResponse resp = streamingDatabaseResponseCapture.getValue();
     assertTrue(resp.getGetRange().getDone());
     assertTrue(resp.getGetRange().getKeyValuesList().isEmpty());
@@ -58,7 +58,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).build());
 
-    verify(tx1Observer, timeout(5000).times(1)).onError(any());
+    verify(tx1Observer, timeout(10000).times(1)).onError(any());
     // make sure we didn't commit "hello".
     assertNull(getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
     // and that we did commit "hello2".
@@ -92,7 +92,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setGetReadVersion(GetReadVersionRequest.newBuilder().build()).
         build());
-    verify(tx1Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx1Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     StreamingDatabaseResponse resp = streamingDatabaseResponseCapture.getValue();
     assertTrue(resp.hasGetReadVersion());
 
@@ -115,7 +115,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).build());
 
-    verify(tx1Observer, timeout(5000).times(1)).onError(any());
+    verify(tx1Observer, timeout(10000).times(1)).onError(any());
     // make sure we didn't commit "hello".
     assertNull(getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
     // and that we did commit "hello2".
@@ -149,7 +149,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setGetReadVersion(GetReadVersionRequest.newBuilder().build()).
         build());
-    verify(tx1Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx1Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     StreamingDatabaseResponse resp = streamingDatabaseResponseCapture.getValue();
     assertTrue(resp.hasGetReadVersion());
 
@@ -171,7 +171,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).build());
 
-    verify(tx1Observer, timeout(5000).times(1)).onError(any());
+    verify(tx1Observer, timeout(10000).times(1)).onError(any());
     // and that we did commit "hello" (with the empty string).
     assertEquals("", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
   }
@@ -200,7 +200,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
             setEndBytes(ByteString.copyFrom("hello4", StandardCharsets.UTF_8)).build()).
         build());
     // expected to receive no rows.
-    verify(tx1Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx1Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     StreamingDatabaseResponse resp = streamingDatabaseResponseCapture.getValue();
     assertTrue(resp.getGetRange().getDone());
     assertTrue(resp.getGetRange().getKeyValuesList().isEmpty());
@@ -225,7 +225,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setGetReadVersion(GetReadVersionRequest.newBuilder().build()).
         build());
-    verify(tx2Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     resp = streamingDatabaseResponseCapture.getValue();
     assertTrue(resp.hasGetReadVersion());
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
@@ -239,16 +239,16 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
-    verify(tx2Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     tx2Stub.onCompleted();
-    verify(tx2Observer, timeout(5000).times(1)).onCompleted();
+    verify(tx2Observer, timeout(10000).times(1)).onCompleted();
     verify(tx2Observer, never()).onError(any());
 
     // now if we commit tx1, it should conflict and fail.
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).build());
 
-    verify(tx1Observer, timeout(5000).times(1)).onError(any());
+    verify(tx1Observer, timeout(10000).times(1)).onError(any());
     // make sure we didn't commit "hello".
     assertNull(getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
   }
@@ -276,7 +276,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
             setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).build()).
         build());
     // expected to receive null.
-    verify(tx1Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx1Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     StreamingDatabaseResponse resp = streamingDatabaseResponseCapture.getValue();
     assertTrue(resp.hasGetValue());
     assertFalse(resp.getGetValue().hasValue());
@@ -300,7 +300,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setGetReadVersion(GetReadVersionRequest.newBuilder().build()).
         build());
-    verify(tx2Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     resp = streamingDatabaseResponseCapture.getValue();
     assertTrue(resp.hasGetReadVersion());
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
@@ -313,16 +313,16 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
-    verify(tx2Observer, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     tx2Stub.onCompleted();
-    verify(tx2Observer, timeout(5000).times(1)).onCompleted();
+    verify(tx2Observer, timeout(10000).times(1)).onCompleted();
     verify(tx2Observer, never()).onError(any());
 
     // now if we commit tx1, it should conflict and fail.
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).build());
 
-    verify(tx1Observer, timeout(5000).times(1)).onError(any());
+    verify(tx1Observer, timeout(10000).times(1)).onError(any());
     // make sure we didn't commit "hello".
     assertNull(getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
   }
