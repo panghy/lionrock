@@ -105,7 +105,6 @@ public class RemoteTransaction implements TransactionMixin {
 
       @Override
       public void onError(Throwable t) {
-        requestSink.onCompleted();
         futures.forEach(x -> x.completeExceptionally(t));
         remoteError = t;
       }
