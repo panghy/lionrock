@@ -15,6 +15,9 @@ public interface StreamingDatabaseResponseVisitor {
   default void handleGetValue(GetValueResponse resp) {
   }
 
+  default void handleGetKey(GetKeyResponse resp) {
+  }
+
   default void handleGetRange(GetRangeResponse resp) {
   }
 
