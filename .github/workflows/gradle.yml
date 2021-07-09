@@ -100,7 +100,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Test with Gradle
-        run: ./gradlew test --no-daemon
+        run: ./gradlew test --no-daemon --debug
 
       - name: Generate JaCoCo Badge
         id: jacoco
