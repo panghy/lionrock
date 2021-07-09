@@ -95,8 +95,6 @@ public class RemoteTransaction implements TransactionMixin {
         if (cancelled.get() || remoteError != null) {
           // ignore if client-side cancelled or server-side errored out.
         } else if (value.hasCommitTransaction()) {
-          inflightFutureChain.whenComplete((o, throwable) ->
-              requestSink.onCompleted());
           commitResponse.set(value.getCommitTransaction());
           completed.set(true);
           commitFuture.completeAsync(() -> null, getExecutor());
@@ -114,6 +112,7 @@ public class RemoteTransaction implements TransactionMixin {
 
       @Override
       public void onCompleted() {
+        requestSink.onCompleted();
         completed.set(true);
       }
     });
