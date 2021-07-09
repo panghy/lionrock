@@ -44,7 +44,6 @@ public class RemoteTransaction implements TransactionMixin {
   private final AtomicBoolean commitStarted = new AtomicBoolean(false);
   private final AtomicBoolean cancelled = new AtomicBoolean(false);
   private final AtomicBoolean completed = new AtomicBoolean(false);
-  private CompletableFuture<Void> commitFuture;
   private final AtomicReference<CommitTransactionResponse> commitResponse = new AtomicReference<>();
   private final SequenceResponseDemuxer demuxer;
   private final AtomicLong sequenceId = new AtomicLong();
@@ -78,7 +77,7 @@ public class RemoteTransaction implements TransactionMixin {
    */
   private final RemoteReadTransaction readTransaction = new RemoteReadTransaction();
   private final List<CompletableFuture<?>> futures = new ArrayList<>();
-  private CompletableFuture<?> inflightFutureChain = CompletableFuture.completedFuture(null);
+  private final CompletableFuture<Void> commitFuture = newCompletableFuture();
 
   private Throwable remoteError;
 
@@ -95,8 +94,6 @@ public class RemoteTransaction implements TransactionMixin {
         if (cancelled.get() || remoteError != null) {
           // ignore if client-side cancelled or server-side errored out.
         } else if (value.hasCommitTransaction()) {
-          // close our connection when all inflight futures are done (watches/versionstamp).
-          inflightFutureChain.whenComplete((o, t) -> requestSink.onCompleted());
           commitResponse.set(value.getCommitTransaction());
           completed.set(true);
           commitFuture.completeAsync(() -> null, getExecutor());
@@ -308,7 +305,6 @@ public class RemoteTransaction implements TransactionMixin {
     requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
         CommitTransactionRequest.newBuilder().build()).
         build());
-    commitFuture = newCompletableFuture();
     return commitFuture;
   }
 
@@ -342,10 +338,6 @@ public class RemoteTransaction implements TransactionMixin {
     synchronized (futures) {
       futures.add(toReturn);
     }
-    // ensure that every future is completed in the chain.
-    inflightFutureChain = inflightFutureChain.
-        exceptionally(x -> null).
-        thenCompose(x -> toReturn);
     return toReturn;
   }
 
