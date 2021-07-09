@@ -28,7 +28,7 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
   /**
    * {@link CompletableFuture} to signal when a result is available.
    */
-  private CompletableFuture<Boolean> onHasNextFuture;
+  private CompletableFuture<Boolean> onHasNextFuture = new CompletableFuture<>();
   private boolean done = false;
   private boolean cancelled = false;
   private byte[] prevKey = null;
