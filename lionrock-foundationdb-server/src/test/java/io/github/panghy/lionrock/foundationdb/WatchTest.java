@@ -53,7 +53,6 @@ class WatchTest extends AbstractStreamingGrpcTest {
     tx1Stub.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
         CommitTransactionRequest.newBuilder().build()
     ).build());
-    tx1Stub.onCompleted();
     verify(tx1Observer, timeout(5000).times(1)).onNext(tx1aCapture.capture());
     assertTrue(tx1aCapture.getValue().hasCommitTransaction());
     verify(tx1Observer, never()).onError(any());

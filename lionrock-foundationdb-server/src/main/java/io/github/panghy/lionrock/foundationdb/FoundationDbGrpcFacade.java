@@ -419,24 +419,76 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           // start the span and scope for the commit transaction call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.commit_transaction");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          handleException(tx.commit(), opSpan, responseObserver, "failed to commit transaction").
-              thenAccept(x -> {
-                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
-                  synchronized (responseObserver) {
-                    responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                        setCommitTransaction(CommitTransactionResponse.newBuilder().
-                            setCommittedVersion(tx.getCommittedVersion()).build()).build());
+          handleException(tx.commit(), opSpan, responseObserver,
+              "failed to commit transaction").
+              whenComplete((x, throwable) -> {
+                if (throwable == null) {
+                  try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+                    synchronized (responseObserver) {
+                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setCommitTransaction(CommitTransactionResponse.newBuilder().
+                              setCommittedVersion(tx.getCommittedVersion()).build()).build());
+                    }
+                    if (logger.isDebugEnabled()) {
+                      String msg = "Committed transaction: " + tx.getCommittedVersion();
+                      opSpan.event(msg);
+                      logger.debug(msg);
+                    }
                   }
-                  if (logger.isDebugEnabled()) {
-                    String msg = "Committed transaction: " + tx.getCommittedVersion();
-                    opSpan.event(msg);
-                    logger.debug(msg);
-                  }
+                  // we only close the server-side connection when all post commit futures are resolved (whether success
+                  // or failures).
+                  postCommitFutures.whenComplete((ignored, t) -> {
+                    if (overallSpan != null) {
+                      if (rowsRead.get() > 0) {
+                        overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
+                      }
+                      if (rangeGetBatches.get() > 0) {
+                        overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
+                      }
+                      if (rowsWritten.get() > 0) {
+                        overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
+                      }
+                      if (clears.get() > 0) {
+                        overallSpan.tag("clears", String.valueOf(clears.get()));
+                      }
+                      if (getReadVersion.get() > 0) {
+                        overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
+                      }
+                      if (readConflictAdds.get() > 0) {
+                        overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
+                      }
+                      if (writeConflictAdds.get() > 0) {
+                        overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
+                      }
+                      if (rowsMutated.get() > 0) {
+                        overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
+                      }
+                      if (getVersionstamp.get() > 0) {
+                        overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
+                      }
+                      if (keysRead.get() > 0) {
+                        overallSpan.tag("keys_read", String.valueOf(keysRead.get()));
+                      }
+                      if (getApproximateSize.get() > 0) {
+                        overallSpan.tag("get_approximate_size", String.valueOf(getApproximateSize.get()));
+                      }
+                      // close the connection after all post commits are done.
+                      synchronized (this) {
+                        responseObserver.onCompleted();
+                      }
+                    }
+                  });
                 }
-              }).whenComplete((unused, throwable) -> {
-            opScope.close();
-            opSpan.end();
-          });
+                // close the transaction.
+                try {
+                  if (tx != null) {
+                    tx.close();
+                  }
+                } catch (RuntimeException ignored) {
+                }
+                opScope.close();
+                opSpan.end();
+              });
         } else if (value.hasGetValue()) {
           if (logger.isDebugEnabled()) {
             String msg = "GetValueRequest on: " + printable(value.getGetValue().getKey().toByteArray());
@@ -1021,69 +1073,17 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       public void onError(Throwable t) {
         logger.warn("onError from client in executeTransaction", t);
         if (tx != null) {
-          tx.cancel();
           tx.close();
         }
       }
 
       @Override
       public void onCompleted() {
-        // we only close the server-side connection when all post commit futures are resolved (whether success or
-        // failures).
-        postCommitFutures.whenComplete((ignored, throwable) -> {
-          try {
-            if (tx != null) {
-              if (!commitStarted.get()) {
-                tx.cancel();
-              }
-              tx.close();
-            }
-          } finally {
-            if (overallSpan != null) {
-              if (rowsRead.get() > 0) {
-                overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
-              }
-              if (rangeGetBatches.get() > 0) {
-                overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
-              }
-              if (rowsWritten.get() > 0) {
-                overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
-              }
-              if (clears.get() > 0) {
-                overallSpan.tag("clears", String.valueOf(clears.get()));
-              }
-              if (getReadVersion.get() > 0) {
-                overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
-              }
-              if (readConflictAdds.get() > 0) {
-                overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
-              }
-              if (writeConflictAdds.get() > 0) {
-                overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
-              }
-              if (rowsMutated.get() > 0) {
-                overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
-              }
-              if (getVersionstamp.get() > 0) {
-                overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
-              }
-              if (keysRead.get() > 0) {
-                overallSpan.tag("keys_read", String.valueOf(keysRead.get()));
-              }
-              if (getApproximateSize.get() > 0) {
-                overallSpan.tag("get_approximate_size", String.valueOf(getApproximateSize.get()));
-              }
-            }
-            // close the connection after all post commits are done.
-            try {
-              synchronized (this) {
-                responseObserver.onCompleted();
-              }
-            } catch (IllegalStateException ex) {
-              // ignored.
-            }
-          }
-        });
+        // if the client closes without committing, we'll close as well.
+        responseObserver.onCompleted();
+        if (tx != null) {
+          tx.close();
+        }
       }
     };
   }
