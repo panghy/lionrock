@@ -254,14 +254,14 @@ public class FoundationDBClientTests extends AbstractGrpcTest {
   }
 
   @Test
-  void testInvalidGetVersionstamp() {
+  void testInvalidGetVersionstamp() throws InterruptedException, TimeoutException {
     Database stub = getDb();
     CompletableFuture<byte[]> cf = stub.run(Transaction::getVersionstamp);
     assertNotNull(cf);
     try {
-      cf.join();
+      cf.get(5, TimeUnit.SECONDS);
       fail();
-    } catch (CompletionException expected) {
+    } catch (ExecutionException expected) {
     }
   }
 

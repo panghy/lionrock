@@ -78,6 +78,7 @@ public class RemoteTransaction implements TransactionMixin {
    */
   private final RemoteReadTransaction readTransaction = new RemoteReadTransaction();
   private final List<CompletableFuture<?>> futures = new ArrayList<>();
+  private CompletableFuture<?> inflightFutureChain = CompletableFuture.completedFuture(null);
 
   private Throwable remoteError;
 
@@ -94,7 +95,8 @@ public class RemoteTransaction implements TransactionMixin {
         if (cancelled.get() || remoteError != null) {
           // ignore if client-side cancelled or server-side errored out.
         } else if (value.hasCommitTransaction()) {
-          requestSink.onCompleted();
+          inflightFutureChain.whenComplete((o, throwable) ->
+              requestSink.onCompleted());
           commitResponse.set(value.getCommitTransaction());
           completed.set(true);
           commitFuture.completeAsync(() -> null, getExecutor());
@@ -340,6 +342,10 @@ public class RemoteTransaction implements TransactionMixin {
     synchronized (futures) {
       futures.add(toReturn);
     }
+    // ensure that every future is completed in the chain.
+    inflightFutureChain = inflightFutureChain.
+        exceptionally(x -> null).
+        thenCompose(x -> toReturn);
     return toReturn;
   }
 
