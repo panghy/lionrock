@@ -66,8 +66,7 @@ public class FoundationDBClientTests extends AbstractGrpcTest {
 
   @Test
   void testStartTransaction_withInvalidDatabaseName() {
-    Database database = RemoteFoundationDBDatabaseFactory.openPlainText("localhost", getPort(),
-        "INVALID", "integration test");
+    Database database = RemoteFoundationDBDatabaseFactory.open("INVALID", "integration test", channel);
     try {
       database.runAsync(ReadTransaction::getReadVersion).join();
       fail();

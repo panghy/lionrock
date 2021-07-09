@@ -95,6 +95,8 @@ public class RemoteTransaction implements TransactionMixin {
         if (cancelled.get() || remoteError != null) {
           // ignore if client-side cancelled or server-side errored out.
         } else if (value.hasCommitTransaction()) {
+          // close our connection when all inflight futures are done (watches/versionstamp).
+          inflightFutureChain.whenComplete((o, t) -> requestSink.onCompleted());
           commitResponse.set(value.getCommitTransaction());
           completed.set(true);
           commitFuture.completeAsync(() -> null, getExecutor());

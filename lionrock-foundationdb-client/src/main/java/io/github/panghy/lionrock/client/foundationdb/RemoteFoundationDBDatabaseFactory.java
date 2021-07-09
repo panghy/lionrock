@@ -4,7 +4,6 @@ import com.apple.foundationdb.Database;
 import io.github.panghy.lionrock.client.foundationdb.impl.RemoteDatabase;
 import io.github.panghy.lionrock.proto.TransactionalKeyValueStoreGrpc;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -74,46 +73,6 @@ public class RemoteFoundationDBDatabaseFactory {
                               String clientIdentifier,
                               Executor executor,
                               ManagedChannel channel) {
-    return new RemoteDatabase(databaseName, clientIdentifier, executor,
-        TransactionalKeyValueStoreGrpc.newStub(channel));
-  }
-
-  /**
-   * Open a connection to a remote transactional, key-value store via gRPC with no encryption. See
-   * {@link #open(String, String, Executor, ManagedChannel)} for using a custom built {@link ManagedChannel}.
-   *
-   * @param host             The database host to connect to.
-   * @param port             The port that runs the database service.
-   * @param databaseName     The database to open (must exist on the remote end).
-   * @param clientIdentifier The client identifier.
-   * @return A {@link io.github.panghy.lionrock.client.foundationdb.impl.RemoteDatabase}.
-   */
-  public static Database openPlainText(String host,
-                                       int port,
-                                       String databaseName,
-                                       String clientIdentifier) {
-    return openPlainText(host, port, databaseName, clientIdentifier, DEFAULT_EXECUTOR);
-  }
-
-  /**
-   * Open a connection to a remote transactional, key-value store via gRPC with no encryption. See
-   * {@link #open(String, String, Executor, ManagedChannel)} for using a custom built {@link ManagedChannel}.
-   *
-   * @param host             The database host to connect to.
-   * @param port             The port that runs the database service.
-   * @param databaseName     The database to open (must exist on the remote end).
-   * @param clientIdentifier The client identifier.
-   * @param executor         The executor to use.
-   * @return A {@link io.github.panghy.lionrock.client.foundationdb.impl.RemoteDatabase}.
-   */
-  public static Database openPlainText(String host,
-                                       int port,
-                                       String databaseName,
-                                       String clientIdentifier,
-                                       Executor executor) {
-    ManagedChannel channel = ManagedChannelBuilder.forAddress(host, port).
-        usePlaintext().
-        build();
     return new RemoteDatabase(databaseName, clientIdentifier, executor,
         TransactionalKeyValueStoreGrpc.newStub(channel));
   }

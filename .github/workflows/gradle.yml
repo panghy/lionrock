@@ -100,16 +100,14 @@ jobs:
         run: chmod +x gradlew
 
       - name: Test with Gradle
-        run: ./gradlew test --no-daemon --info
+        run: ./gradlew test codeCoverageReport --no-daemon
 
       - name: Generate JaCoCo Badge
         id: jacoco
         uses: cicirello/jacoco-badge-generator@v2.1.0
         with:
           generate-branches-badge: true
-          jacoco-csv-file: >
-            lionrock-foundationdb-server/build/reports/jacoco/test/jacocoTestReport.csv
-            lionrock-foundationdb-client/build/reports/jacoco/test/jacocoTestReport.csv
+          jacoco-csv-file: build/reports/jacoco/codeCoverageReport/codeCoverageReport.csv
 
       - name: Log coverage percentage
         run: |
@@ -127,7 +125,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: jacoco-report
-          path: '**/build/reports/jacoco/'
+          path: 'build/reports/jacoco/'
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
