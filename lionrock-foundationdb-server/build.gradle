@@ -34,10 +34,10 @@ dependencies {
     implementation project(':lionrock-proto-java')
     implementation 'org.foundationdb:fdb-java:6.2.22'
 
+    testImplementation project(':lionrock-foundationdb-client')
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.2'
-    testImplementation project(':lionrock-foundationdb-client')
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.2'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
