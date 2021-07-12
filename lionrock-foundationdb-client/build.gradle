@@ -24,7 +24,7 @@ dependencies {
     implementation 'io.grpc:grpc-stub:1.38.0'
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.17.3'
 
-    testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.9.0'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.11.2'
     testImplementation 'org.mockito:mockito-junit-jupiter:3.9.0'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
