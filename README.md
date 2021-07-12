@@ -90,3 +90,26 @@ lionrock:
       - name: another-fdb-cluster
         clusterFile: /etc/foundationdb/another-fdb-cluster.cluster
 ```
+
+## Logging
+
+You can enable detailed logging of all requests (with trace and span IDs) by enabling DEBUG logging in the facade:
+
+```
+./gradlew bootRun --args='--logging.level.io.github.panghy.lionrock=DEBUG'
+```
+
+Sample log output:
+
+```
+2021-07-12 12:28:52.964 DEBUG [fdb-facade,60ec97f43a2e0f97d084b377b042fa3e,d084b377b042fa3e] 9936 --- [ault-executor-1] i.g.p.l.f.FoundationDbGrpcFacade         : WatchKeyRequest for: hello
+2021-07-12 12:28:52.965 DEBUG [fdb-facade,60ec97f43a2e0f97d084b377b042fa3e,d084b377b042fa3e] 9936 --- [ault-executor-1] i.g.p.l.f.FoundationDbGrpcFacade         : CommitTransactionRequest
+2021-07-12 12:28:52.966 DEBUG [fdb-facade,60ec97f43a2e0f97d084b377b042fa3e,d2f415921f110513] 9936 --- [     fdb-java-2] i.g.p.l.f.FoundationDbGrpcFacade         : Committed transaction: -1
+2021-07-12 12:28:52.977 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,c6d369ecc2fa2bb6] 9936 --- [ault-executor-0] i.g.p.l.f.FoundationDbGrpcFacade         : Starting transaction setKeyAndCommit against db: fdb
+2021-07-12 12:28:52.977 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,c6d369ecc2fa2bb6] 9936 --- [ault-executor-0] i.g.p.l.f.FoundationDbGrpcFacade         : SetValueRequest for: hello => 
+2021-07-12 12:28:52.977 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,c6d369ecc2fa2bb6] 9936 --- [ault-executor-0] i.g.p.l.f.FoundationDbGrpcFacade         : GetApproximateSizeRequest
+2021-07-12 12:28:52.977 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,d5ed2a246b6fcc6c] 9936 --- [     fdb-java-2] i.g.p.l.f.FoundationDbGrpcFacade         : GetApproximateSize is: 68
+2021-07-12 12:28:52.988 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,c6d369ecc2fa2bb6] 9936 --- [ault-executor-0] i.g.p.l.f.FoundationDbGrpcFacade         : CommitTransactionRequest
+2021-07-12 12:28:52.997 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,2693bc53fb9b27dd] 9936 --- [     fdb-java-2] i.g.p.l.f.FoundationDbGrpcFacade         : Committed transaction: 105114348668435
+2021-07-12 12:28:53.002 DEBUG [fdb-facade,60ec97f43a2e0f97d084b377b042fa3e,5e028e13152da40f] 9936 --- [     fdb-java-2] i.g.p.l.f.FoundationDbGrpcFacade         : WatchKeyRequest Completed for: hello
+```

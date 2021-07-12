@@ -6,8 +6,6 @@ plugins {
     id 'jacoco'
 }
 
-group 'io.github.panghy.lionrock'
-version = '0.0.1-SNAPSHOT'
 sourceCompatibility = '11'
 
 repositories {
