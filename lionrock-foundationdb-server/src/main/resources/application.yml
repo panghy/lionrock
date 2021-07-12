@@ -4,8 +4,9 @@ lionrock:
     clusters:
       # Default cluster
       - name: fdb
-      - name: another-fdb-cluster
-        clusterFile: /etc/foundationdb/another-fdb-cluster.cluster
+#     Example for exposing another cluster by cluster file.
+#     - name: another-fdb-cluster
+#       clusterFile: /etc/foundationdb/another-fdb-cluster.cluster
 
 spring:
   application:
