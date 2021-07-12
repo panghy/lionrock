@@ -33,10 +33,16 @@ test {
     useJUnitPlatform()
 }
 
+task sourceJar(type: Jar) {
+    classifier 'sources'
+    from sourceSets.main.allJava
+}
+
 publishing {
     publications {
         maven(MavenPublication) {
             from components.java
+            artifact tasks.sourceJar
         }
     }
     repositories {
@@ -46,6 +52,18 @@ publishing {
             credentials {
                 username = System.getenv("GITHUB_ACTOR")
                 password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+        maven {
+            name = "OSSRH"
+            if(project.version.endsWith('-SNAPSHOT')) {
+                url "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            } else {
+                url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            }
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
             }
         }
     }
