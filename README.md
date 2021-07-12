@@ -5,8 +5,7 @@ FoundationDB (https://github.com/apple/foundationdb).
 
 ## Features
 
-* An implementation of the server (lionrock-foundationdb-server) that's backed by an actual FoundationDB Cluster built
-  using Spring Boot
+* An implementation of the server (lionrock-foundationdb-server) that's backed by an actual FoundationDB Cluster
 * Could be used as a facade layer in front of a FoundationDB Server without having to utilize native libraries
 * An API-compatible (with caveats) drop-in replacement of the FoundationDB Java Client is provided that talks to the
   gRPC server instead of using native libraries
@@ -46,10 +45,14 @@ To run the server on the default port:
 Please note that by default it'll negotiate a throw away account for monitoring the service via Wavefront
 
 ```
-./gradlew :lionrock-foundationdb-server:bootRun
+./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true'
 ```
 
-You'll see something like:
+To run the server with micrometer and sleuth reporting to Wavefront (with a throw away account by default):
+
+```
+./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true'
+```
 
 ```
 A Wavefront account has been provisioned successfully and the API token has been saved to disk.
@@ -63,4 +66,27 @@ Connect to your Wavefront dashboard using this one-time use link:
 https://wavefront.surf/us/xxxxxxx
 ```
 
-By cliking on the link, you can see metrics and traces from the server (depending on sampling etc.)
+By clicking on the link, you can see metrics and traces from the server (depending on sampling etc.)
+
+To use an actual Wavefront account:
+
+```
+./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true,management.metrics.export.wavefront.api-token=xxxxxxx,management.metrics.export.wavefront.uri=https://wavefront.surf'
+```
+
+Or use a YAML file (configuration below):
+
+## Configuration
+
+By default, the cluster named "fdb" is used to identify the intended cluster to use from a request. It is possible to
+expose multiple FoundationDB clusters by mapping a name to cluster files on disk.
+
+```yaml
+lionrock:
+  foundationdb:
+    clusters:
+      # Default cluster
+      - name: fdb
+      - name: another-fdb-cluster
+        clusterFile: /etc/foundationdb/another-fdb-cluster.cluster
+```

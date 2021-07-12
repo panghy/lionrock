@@ -4,6 +4,8 @@ lionrock:
     clusters:
       # Default cluster
       - name: fdb
+      - name: another-fdb-cluster
+        clusterFile: /etc/foundationdb/another-fdb-cluster.cluster
 
 spring:
   application:
@@ -13,14 +15,13 @@ spring:
 logging:
   level:
     root: INFO
-    io.github.panghy.lionrock: DEBUG
 
 # Below are Wavefront reporting specific entries (need API-token and URL to really work).
 management:
-  endpoint:
-    wavefront:
-      # disable wavefront reporting by default.
-      enabled: false
+  metrics:
+    export:
+      wavefront:
+        enabled: false
 
 wavefront:
   application:
