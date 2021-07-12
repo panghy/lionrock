@@ -75,6 +75,8 @@ To use an actual Wavefront account:
 
 Or use a YAML file (see Spring Boot documentation) for less command-line mangling.
 
+# FoundationDB gRPC Facade
+
 ## Configuration
 
 By default, the cluster named "fdb" is used to identify the intended cluster to use from a request. It is possible to
@@ -111,4 +113,28 @@ Sample log output:
 2021-07-12 12:28:52.988 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,c6d369ecc2fa2bb6] 9936 --- [ault-executor-0] i.g.p.l.f.FoundationDbGrpcFacade         : CommitTransactionRequest
 2021-07-12 12:28:52.997 DEBUG [fdb-facade,60ec97f4e6736daac6d369ecc2fa2bb6,2693bc53fb9b27dd] 9936 --- [     fdb-java-2] i.g.p.l.f.FoundationDbGrpcFacade         : Committed transaction: 105114348668435
 2021-07-12 12:28:53.002 DEBUG [fdb-facade,60ec97f43a2e0f97d084b377b042fa3e,5e028e13152da40f] 9936 --- [     fdb-java-2] i.g.p.l.f.FoundationDbGrpcFacade         : WatchKeyRequest Completed for: hello
+```
+
+# FoundationDB gRPC Client
+
+This is a drop-in client for code that otherwise would be using the original java foundationdb library (fdb-java). It
+depends on that library for the interface API as well as supporting libraries like Tuple.
+
+Note that you could use the client with any server that implements the lionrock protocol.
+
+```java
+public class FdbClient {
+  public static void main(String[] args) {
+    ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 6565).
+            usePlaintext().
+            build();
+    // "fdb" is the default database on the server.
+    Database db = RemoteFoundationDBDatabaseFactory.open("fdb", "my client", channel);
+    db.runAsync(tx -> {
+      tx.set(HELLO_B, WORLD_B);
+      return tx.get(HELLO_B);
+    }).join();
+    channel.shutdown();
+  }
+}
 ```

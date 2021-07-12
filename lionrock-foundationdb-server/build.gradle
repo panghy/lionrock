@@ -61,8 +61,8 @@ task sourceJar(type: Jar) {
 
 publishing {
     publications {
-        maven(MavenPublication) {
-            from components.java
+        bootJava(MavenPublication) {
+            artifact bootJar
             artifact tasks.sourceJar
             pom {
                 name = "lionrock-foundationdb-server"
