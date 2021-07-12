@@ -42,7 +42,6 @@ To launch your tests:
 ```
 
 To run the server on the default port:
-Please note that by default it'll negotiate a throw away account for monitoring the service via Wavefront
 
 ```
 ./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true'
@@ -74,7 +73,7 @@ To use an actual Wavefront account:
 ./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true,management.metrics.export.wavefront.api-token=xxxxxxx,management.metrics.export.wavefront.uri=https://wavefront.surf'
 ```
 
-Or use a YAML file (configuration below):
+Or use a YAML file (see Spring Boot documentation) for less command-line mangling.
 
 ## Configuration
 
