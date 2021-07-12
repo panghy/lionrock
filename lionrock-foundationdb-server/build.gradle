@@ -54,10 +54,36 @@ test {
     useJUnitPlatform()
 }
 
+task sourceJar(type: Jar) {
+    classifier 'sources'
+    from sourceSets.main.allJava
+}
+
 publishing {
     publications {
         maven(MavenPublication) {
             from components.java
+            artifact tasks.sourceJar
+            pom {
+                name = "lionrock-foundationdb-server"
+                description = "FoundationDB gRPC Server"
+                url = "https://github.com/panghy/lionrock"
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "panghy"
+                        name = "Clement Pang"
+                    }
+                }
+                scm {
+                    url = "https://github.com/panghy/lionrock"
+                }
+            }
         }
     }
     repositories {
@@ -67,6 +93,18 @@ publishing {
             credentials {
                 username = System.getenv("GITHUB_ACTOR")
                 password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+        maven {
+            name = "OSSRH"
+            if(project.version.endsWith('-SNAPSHOT')) {
+                url "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            } else {
+                url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            }
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
             }
         }
     }
