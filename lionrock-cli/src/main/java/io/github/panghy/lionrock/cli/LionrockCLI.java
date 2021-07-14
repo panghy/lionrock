@@ -3,16 +3,14 @@ package io.github.panghy.lionrock.cli;
 import com.apple.foundationdb.Database;
 import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.Transaction;
-import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.Banner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
-import javax.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
 
 import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
@@ -21,7 +19,9 @@ import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
 @ShellComponent
 public class LionrockCLI {
 
-  private ManagedChannel channel;
+  @Autowired
+  private ConnectionState connectionState;
+
   private Database db;
   private boolean writemode = false;
 
@@ -30,13 +30,7 @@ public class LionrockCLI {
                         @ShellOption(value = "--port", defaultValue = "6565") int port,
                         @ShellOption(value = "--name", defaultValue = "fdb") String databaseName,
                         @ShellOption(value = "--identifier", defaultValue = "lionrock-cli") String clientIdentifier) {
-    if (channel != null) {
-      channel.shutdownNow();
-    }
-    channel = ManagedChannelBuilder.forAddress(host, port).
-        usePlaintext().
-        build();
-    db = RemoteFoundationDBDatabaseFactory.open(databaseName, clientIdentifier, channel);
+    db = connectionState.connect(host, port, databaseName, clientIdentifier);
     return "connected to: " + host + ":" + port + " as: " + clientIdentifier + " accessing named database: " +
         databaseName;
   }
@@ -163,18 +157,10 @@ public class LionrockCLI {
     return stream.toByteArray();
   }
 
-  @PreDestroy
-  private void shutdown() {
-    if (db != null) {
-      db.close();
-    }
-    if (channel != null) {
-      channel.shutdownNow();
-    }
-  }
-
   public static void main(String[] args) {
-    SpringApplication.run(LionrockCLI.class, args);
+    SpringApplication app = new SpringApplication(LionrockCLI.class);
+    app.setBannerMode(Banner.Mode.OFF);
+    app.run(args);
   }
 
   public enum OnOff {
