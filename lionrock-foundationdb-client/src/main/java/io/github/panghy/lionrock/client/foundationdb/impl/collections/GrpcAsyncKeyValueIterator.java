@@ -55,7 +55,7 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
         // waiting for key values.
         if (resp.getDone() && responses.isEmpty()) {
           onHasNextFuture.complete(false);
-        } else {
+        } else if (!responses.isEmpty()) {
           onHasNextFuture.complete(true);
         }
       }
@@ -106,7 +106,7 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
     } else if (done) {
       return false;
     }
-    return onHasNextFuture.join();
+    return onHasNext().join();
   }
 
   @Override

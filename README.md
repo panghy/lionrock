@@ -21,7 +21,6 @@ FoundationDB (https://github.com/apple/foundationdb).
 * Each call to a transaction is streamed back to the server, future work to batch up mutations can be implemented for
   better performance
 * Locality APIs will not work against a RemoteTransaction (which is not an FDBTransaction)
-* No CLI is available for the server (yet)
 * Because the Java client still depends on fdb-java, it is possible that the native libraries will still be loaded (and
   might fail on unsupported platforms)
 * Support libraries such as Tuples are still provided in fdb-java library
@@ -44,13 +43,13 @@ To launch your tests:
 To run the server on the default port:
 
 ```
-./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true'
+./gradlew :lionrock-foundationdb-server:bootRun --args='--management.metrics.export.wavefront.enabled=true'
 ```
 
 To run the server with micrometer and sleuth reporting to Wavefront (with a throw away account by default):
 
 ```
-./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true'
+./gradlew :lionrock-foundationdb-server:bootRun --args='--management.metrics.export.wavefront.enabled=true'
 ```
 
 ```
@@ -70,7 +69,7 @@ By clicking on the link, you can see metrics and traces from the server (dependi
 To use an actual Wavefront account:
 
 ```
-./gradlew bootRun --args='--management.metrics.export.wavefront.enabled=true,management.metrics.export.wavefront.api-token=xxxxxxx,management.metrics.export.wavefront.uri=https://wavefront.surf'
+./gradlew :lionrock-foundationdb-server:bootRun --args='--management.metrics.export.wavefront.enabled=true,management.metrics.export.wavefront.api-token=xxxxxxx,management.metrics.export.wavefront.uri=https://wavefront.surf'
 ```
 
 Or use a YAML file (see Spring Boot documentation) for less command-line mangling.
@@ -97,7 +96,7 @@ lionrock:
 You can enable detailed logging of all requests (with trace and span IDs) by enabling DEBUG logging in the facade:
 
 ```
-./gradlew bootRun --args='--logging.level.io.github.panghy.lionrock=DEBUG'
+./gradlew :lionrock-foundationdb-server:bootRun --args='--logging.level.io.github.panghy.lionrock=DEBUG'
 ```
 
 Sample log output:
@@ -137,4 +136,34 @@ public class FdbClient {
     channel.shutdown();
   }
 }
+```
+
+# CLI Client
+
+```
+./gradlew :lionrock-cli:build
+java -jar lionrock-cli/build/libs/lionrock-cli-0.0.1-SNAPSHOT.jar
+```
+
+Use the command `connect` to connect to a remote server (defaults to localhost:6565).
+
+```shell
+shell:>connect
+connected to: localhost:6565 as: lionrock-cli accessing named database: fdb
+shell:>get hello
+`hello' is `world2'
+shell:>set hello world
+ERROR: writemode must be enabled to set or clear keys in the database.
+Details of the error have been omitted. You can use the stacktrace command to print the full stacktrace.
+shell:>writemode on
+shell:>set hello world
+Committed (105220050616009)
+shell:>get hello
+`hello' is `world'
+shell:>watch hello
+Committed (-1)
+shell:>set hello world3
+Committed (105220062686213)
+shell:>
+watch fired for key: hello
 ```
