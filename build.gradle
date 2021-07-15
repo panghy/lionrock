@@ -5,7 +5,6 @@ plugins {
 }
 
 allprojects {
-    version = '0.0.1-SNAPSHOT'
     group = 'io.github.panghy.lionrock'
 
     repositories {
