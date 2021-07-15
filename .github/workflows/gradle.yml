@@ -213,7 +213,7 @@ jobs:
 
       # Uploads binary
       - name: upload ${{ matrix.os }} image
-        uses: actions/upload-artifacts@v2
+        uses: actions/upload-artifact@v2
         with:
           name: lionrock-cli-${{ matrix.os }}
           path: build/bin/lionrock-cli
