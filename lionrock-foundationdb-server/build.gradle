@@ -4,6 +4,12 @@ plugins {
     id 'java'
     id 'maven-publish'
     id 'jacoco'
+    id 'signing'
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
 
 sourceCompatibility = '11'
@@ -63,7 +69,6 @@ publishing {
     publications {
         bootJava(MavenPublication) {
             artifact bootJar
-            artifact tasks.sourceJar
             pom {
                 name = "lionrock-foundationdb-server"
                 description = "FoundationDB gRPC Server"
@@ -108,4 +113,15 @@ publishing {
             }
         }
     }
+}
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+}
+
+signing {
+    useGpgCmd()
+    sign publishing.publications.bootJava
 }

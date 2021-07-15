@@ -152,11 +152,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - id: install-secret-key
+        name: Install gpg secret key
+        run: |
+          cat <(echo -e "${{ secrets.OSSRH_GPG_SECRET_KEY }}") | gpg --batch --import
+          gpg --list-secret-keys --keyid-format LONG
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Publish
-        run: ./gradlew publish --no-daemon
+        run: ./gradlew publish --no-daemon -Psigning.gnupg.passphrase=${{ secrets.OSSRH_GPG_SECRET_KEY }} -Psigning.gnupg.executable=gpg -Psigning.gnupg.keyName=${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}

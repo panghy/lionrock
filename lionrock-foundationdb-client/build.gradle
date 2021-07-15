@@ -8,6 +8,12 @@ plugins {
     id 'java'
     id 'maven-publish'
     id 'jacoco'
+    id 'signing'
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
 
 sourceCompatibility = '11'
@@ -40,9 +46,8 @@ task sourceJar(type: Jar) {
 
 publishing {
     publications {
-        maven(MavenPublication) {
+        mavenJava(MavenPublication) {
             from components.java
-            artifact tasks.sourceJar
             pom {
                 name = "lionrock-foundationdb-client"
                 description = "FoundationDB gRPC Client Library"
@@ -87,4 +92,15 @@ publishing {
             }
         }
     }
+}
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+}
+
+signing {
+    useGpgCmd()
+    sign publishing.publications.mavenJava
 }

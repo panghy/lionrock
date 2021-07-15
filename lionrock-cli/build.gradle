@@ -3,6 +3,12 @@ plugins {
     id 'maven-publish'
     id 'com.github.johnrengelman.shadow' version '7.0.0'
     id "org.mikeneck.graalvm-native-image" version "1.4.1"
+    id 'signing'
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
 
 sourceCompatibility = '11'
@@ -119,4 +125,15 @@ publishing {
             }
         }
     }
+}
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+}
+
+signing {
+    useGpgCmd()
+    sign publishing.publications.shadow
 }

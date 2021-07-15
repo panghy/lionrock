@@ -11,6 +11,12 @@ plugins {
     id "com.google.protobuf" version "0.8.17"
     id 'java'
     id 'maven-publish'
+    id 'signing'
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
 
 sourceCompatibility = '11'
@@ -67,7 +73,7 @@ clean {
 
 publishing {
     publications {
-        maven(MavenPublication) {
+        mavenJava(MavenPublication) {
             from components.java
             pom {
                 name = "lionrock-proto-java"
@@ -113,4 +119,15 @@ publishing {
             }
         }
     }
+}
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+}
+
+signing {
+    useGpgCmd()
+    sign publishing.publications.mavenJava
 }
