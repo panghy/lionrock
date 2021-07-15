@@ -1,4 +1,4 @@
-name: Publish package to GitHub Packages
+name: Publish Packages
 on:
   release:
     types: [ created ]
@@ -20,6 +20,59 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Publish with Gradle
-        run: ./gradlew publish
+        run: ./gradlew publish --no-daemon
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+
+  # This job builds and uploads CLI binaries
+  cli-native-binaries:
+    name: build and upload CLI
+    needs: publish
+    strategy:
+      matrix:
+        os: [ macos, ubuntu ]
+    runs-on: ${{ matrix.os }}-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v1
+
+      - uses: ayltai/setup-graalvm@v1
+        with:
+          java-version: 11
+          graalvm-version: 21.1.0
+          native-image: true
+
+      # (Optional) Install native-image
+      - name: install native-image
+        run: gu install native-image
+
+      - name: cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ matrix.os }}-${{ hashFiles('build.gradle') }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ matrix.os }}-
+
+      # Builds native image
+      - name: "build for ${{ matrix.os }}"
+        run: ./gradlew nativeImage --no-daemon
+        env:
+          RUNNING_OS: ${{ matrix.os }}
+          PROJECT_VERSION: ${{ steps.config.outputs.projectVersion }}
+
+      # Uploads binary
+      - name: upload ${{ matrix.os }} image
+        uses: actions/upload-artifact@v2
+        with:
+          name: lionrock-cli-${{ matrix.os }}
+          path: lionrock-cli/build/bin/lionrock-cli
+
+      - name: Cleanup Gradle Cache
+        # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
+        # Restoring these files from a GitHub Actions cache might cause problems for future builds.
+        run: |
+          rm -f ~/.gradle/caches/modules-2/modules-2.lock
+          rm -f ~/.gradle/caches/modules-2/gc.properties
