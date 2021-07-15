@@ -18,6 +18,10 @@ subprojects {
     }
 }
 
+release {
+    tagTemplate = 'v${version}'
+}
+
 // tag::coverageTask[]
 // task to gather code coverage from multiple subprojects
 // NOTE: the `JacocoReport` tasks do *not* depend on the `test` task by default. Meaning you have to ensure
