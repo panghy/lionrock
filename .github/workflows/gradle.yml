@@ -162,14 +162,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Publish
-        run: ./gradlew publish --no-daemon
+        run: ./gradlew publish --no-daemon -Psigning.gnupg.passphrase=${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }} -Psigning.gnupg.executable=gpg -Psigning.gnupg.keyName=${{ secrets.OSSRH_GPG_SECRET_NAME }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
-          ORG_GRADLE_PROJECT_signing.gnupg.passphrase: ${{ secrets.OSSRH_GPG_SECRET_KEY }}
-          ORG_GRADLE_PROJECT_signing.gnupg.executable: gpg
-          ORG_GRADLE_PROJECT_signing.gnupg.keyName: ${{ secrets.OSSRH_GPG_SECRET_NAME }}
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
