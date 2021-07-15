@@ -39,8 +39,13 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: Package
-          path: '**/build/libs'
+          name: lionrock-foundationdb-client
+          path: 'lionrock-foundationdb-client/build/libs'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: lionrock-foundationdb-server
+          path: 'lionrock-foundationdb-server/build/libs/lionrock-foundationdb-server-*.jar'
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
@@ -116,12 +121,6 @@ jobs:
           default_author: github_actions
           message: 'upload badge'
           add: '*.svg'
-
-      - name: Upload JaCoCo coverage report
-        uses: actions/upload-artifact@v2
-        with:
-          name: jacoco-report
-          path: 'build/reports/jacoco/'
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
