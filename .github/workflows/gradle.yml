@@ -19,7 +19,6 @@ jobs:
         with:
           java-version: 11
           graalvm-version: 21.1.0
-          native-image: true
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
@@ -80,7 +79,6 @@ jobs:
         with:
           java-version: 11
           graalvm-version: 21.1.0
-          native-image: true
 
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
@@ -139,12 +137,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v2
-      - name: setup jdk
-        uses: actions/setup-java@v2
+      - uses: ayltai/setup-graalvm@v1
         with:
-          java-version: '11'
-          distribution: 'adopt'
-
+          java-version: 11
+          graalvm-version: 21.1.0
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
