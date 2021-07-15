@@ -202,7 +202,7 @@ jobs:
 
       # Builds native image
       - name: "build for ${{ matrix.os }}"
-        run: ./gradlew nativeImage
+        run: ./gradlew nativeImage --no-daemon
         env:
           RUNNING_OS: ${{ matrix.os }}
           PROJECT_VERSION: ${{ steps.config.outputs.projectVersion }}
@@ -212,7 +212,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: lionrock-cli-${{ matrix.os }}
-          path: build/bin/lionrock-cli
+          path: lionrock-cli/build/bin/lionrock-cli
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
