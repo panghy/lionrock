@@ -75,9 +75,6 @@ publishing {
     publications {
         shadow(MavenPublication) { publication ->
             project.shadow.component(publication)
-        }
-        maven(MavenPublication) {
-            from components.java
             pom {
                 name = "lionrock-cli"
                 description = "Lionrock CLI Client"

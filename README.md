@@ -138,32 +138,38 @@ public class FdbClient {
 }
 ```
 
-# CLI Client
+# Lionrock CLI Client
 
 ```
-./gradlew :lionrock-cli:build
-java -jar lionrock-cli/build/libs/lionrock-cli-0.0.1-SNAPSHOT.jar
+./gradlew :lionrock-cli:shadow && java -jar lionrock-cli/build/libs/lionrock-cli-0.0.1-SNAPSHOT-all.jar
+```
+
+GraalVM native-image:
+
+```
+./gradlew :lionrock-cli:nativeImage && lionrock-cli/build/bin/lionrock-cli
 ```
 
 Use the command `connect` to connect to a remote server (defaults to localhost:6565).
 
 ```shell
-shell:>connect
-connected to: localhost:6565 as: lionrock-cli accessing named database: fdb
-shell:>get hello
-`hello' is `world2'
-shell:>set hello world
-ERROR: writemode must be enabled to set or clear keys in the database.
-Details of the error have been omitted. You can use the stacktrace command to print the full stacktrace.
-shell:>writemode on
-shell:>set hello world
-Committed (105220050616009)
-shell:>get hello
+not-connected:>connect
+gconnected to: localhost:6565 as: lionrock-cli accessing named database: fdb
+localhost:6565:fdb:IDLE>get hello
 `hello' is `world'
-shell:>watch hello
+localhost:6565:fdb:READY>set hello world
+java.lang.IllegalStateException: ERROR: writemode must be enabled to set or clear keys in the database.
+localhost:6565:fdb:READY>writemode on
+localhost:6565:fdb:READY>set hello world
+Committed (105304855882509)
+localhost:6565:fdb:READY>get hello
+`hello' is `world'
+localhost:6565:fdb:READY>watch hello
 Committed (-1)
-shell:>set hello world3
-Committed (105220062686213)
-shell:>
+localhost:6565:fdb:READY>set hello world3
+Committed (105304861518352)
+localhost:6565:fdb:READY>
 watch fired for key: hello
+
+localhost:6565:fdb:READY>
 ```
