@@ -152,24 +152,4 @@ GraalVM native-image:
 
 Use the command `connect` to connect to a remote server (defaults to localhost:6565).
 
-```shell
-not-connected:>connect
-gconnected to: localhost:6565 as: lionrock-cli accessing named database: fdb
-localhost:6565:fdb:IDLE>get hello
-`hello' is `world'
-localhost:6565:fdb:READY>set hello world
-java.lang.IllegalStateException: ERROR: writemode must be enabled to set or clear keys in the database.
-localhost:6565:fdb:READY>writemode on
-localhost:6565:fdb:READY>set hello world
-Committed (105304855882509)
-localhost:6565:fdb:READY>get hello
-`hello' is `world'
-localhost:6565:fdb:READY>watch hello
-Committed (-1)
-localhost:6565:fdb:READY>set hello world3
-Committed (105304861518352)
-localhost:6565:fdb:READY>
-watch fired for key: hello
-
-localhost:6565:fdb:READY>
-```
+![CLI Demo](https://github.com/panghy/lionrock/blob/master/.github/images/cli-demo.gif?raw=true "CLI Demo")

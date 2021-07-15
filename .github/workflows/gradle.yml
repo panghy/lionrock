@@ -39,13 +39,13 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: lionrock-foundationdb-client
-          path: 'lionrock-foundationdb-client/build/libs'
+          name: lionrock-foundationdb-server
+          path: 'lionrock-foundationdb-server/build/libs/lionrock-foundationdb-server-*.jar'
 
       - uses: actions/upload-artifact@v2
         with:
-          name: lionrock-foundationdb-server
-          path: 'lionrock-foundationdb-server/build/libs/lionrock-foundationdb-server-*.jar'
+          name: lionrock-cli
+          path: 'lionrock-cli/build/libs'
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
@@ -155,7 +155,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Publish Snapshots with Gradle
+      - name: Publish
         run: ./gradlew publish --no-daemon
         env:
           GITHUB_TOKEN: ${{ github.token }}
