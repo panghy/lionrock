@@ -66,9 +66,13 @@ public class RemoteTransaction implements TransactionMixin {
         long retryDelayMs = ByteBuffer.wrap(parameter).order(ByteOrder.LITTLE_ENDIAN).getLong();
         remoteTransactionContext.setMaxRetryDelay(retryDelayMs);
       } else {
-        requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetTransactionOption(
-            SetTransactionOptionRequest.newBuilder().setOption(code).setParam(ByteString.copyFrom(parameter)).build()).
-            build());
+        SetTransactionOptionRequest.Builder builder = SetTransactionOptionRequest.newBuilder().
+            setOption(code);
+        if (parameter != null) {
+          builder.setParam(ByteString.copyFrom(parameter));
+        }
+        requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+            setSetTransactionOption(builder.build()).build());
       }
     }
   });
@@ -559,11 +563,6 @@ public class RemoteTransaction implements TransactionMixin {
   private long registerHandler(StreamingDatabaseResponseVisitor visitor, CompletableFuture<?> future) {
     long curr = this.sequenceId.getAndIncrement();
     demuxer.addHandler(curr, new StreamingDatabaseResponseVisitor() {
-
-      @Override
-      public void handleCommitTransaction(CommitTransactionResponse resp) {
-        visitor.handleCommitTransaction(resp);
-      }
 
       @Override
       public void handleGetValue(GetValueResponse resp) {

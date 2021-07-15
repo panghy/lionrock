@@ -31,7 +31,8 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
  *
  * @author Clement Pang
  */
-@SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=-1"})
+@SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=-1",
+    "logging.level.io.github.panghy.lionrock=DEBUG"})
 public abstract class AbstractGrpcTest {
   @Autowired(required = false)
   @Qualifier("grpcServerRunner")

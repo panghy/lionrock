@@ -183,6 +183,47 @@ class GrpcAsyncKeyValueIteratorTest {
     }
   }
 
+  @Test
+  public void testIterator_failed() {
+    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
+    GrpcAsyncKeyValueIterator iterator = new GrpcAsyncKeyValueIterator(removalCallback);
+
+    // add 1st and 2nd element and dequeue (also check remove()).
+    CompletableFuture<Boolean> cf = iterator.onHasNext();
+    assertFalse(cf.isDone());
+
+    iterator.accept(GetRangeResponse.newBuilder().
+        addKeyValues(
+            KeyValue.newBuilder().
+                setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+                setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).build()).
+        addKeyValues(
+            KeyValue.newBuilder().
+                setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+                setValue(ByteString.copyFrom("world2", StandardCharsets.UTF_8)).build()).
+        build());
+    assertTrue(cf.isDone());
+    iterator.next();
+    iterator.next();
+
+    cf = iterator.onHasNext();
+
+    iterator.accept(OperationFailureResponse.newBuilder().setCode(123).setMessage("failed").build());
+    assertTrue(cf.isDone());
+    assertTrue(cf.isCompletedExceptionally());
+    // ignored.
+    iterator.accept(GetRangeResponse.newBuilder().setDone(true).build());
+
+    cf = iterator.onHasNext();
+    assertTrue(cf.isDone());
+    assertTrue(cf.isCompletedExceptionally());
+    try {
+      iterator.next();
+      fail();
+    } catch (Exception expected) {
+    }
+  }
+
   @Test()
   public void testIterator_cancel() {
     GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);

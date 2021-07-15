@@ -9,9 +9,6 @@ import io.github.panghy.lionrock.proto.*;
  */
 public interface StreamingDatabaseResponseVisitor {
 
-  default void handleCommitTransaction(CommitTransactionResponse resp) {
-  }
-
   default void handleGetValue(GetValueResponse resp) {
   }
 
