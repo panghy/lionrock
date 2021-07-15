@@ -76,11 +76,11 @@ jobs:
       - name: remove fdb-server
         run: rm foundationdb-server_6.2.15-1_amd64.deb
 
-      - name: setup jdk
-        uses: actions/setup-java@v2
+      - uses: ayltai/setup-graalvm@v1
         with:
-          java-version: '11'
-          distribution: 'adopt'
+          java-version: 11
+          graalvm-version: 21.1.0
+          native-image: true
 
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
@@ -166,6 +166,57 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+
+      - name: Cleanup Gradle Cache
+        # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
+        # Restoring these files from a GitHub Actions cache might cause problems for future builds.
+        run: |
+          rm -f ~/.gradle/caches/modules-2/modules-2.lock
+          rm -f ~/.gradle/caches/modules-2/gc.properties
+
+  # This job builds and uploads CLI binaries
+  cli-native-binaries:
+    name: build and upload CLI
+    needs: test
+    strategy:
+      matrix:
+        os: [ macos, ubuntu ]
+    runs-on: ${{ matrix.os }}-latest
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v1
+
+      - uses: ayltai/setup-graalvm@v1
+        with:
+          java-version: 11
+          graalvm-version: 21.1.0
+          native-image: true
+
+      # (Optional) Install native-image
+      - name: install native-image
+        run: gu install native-image
+
+      - name: cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ matrix.os }}-${{ hashFiles('build.gradle') }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ matrix.os }}-
+
+      # Builds native image
+      - name: "build for ${{ matrix.os }}"
+        run: ./gradlew nativeImage
+        env:
+          RUNNING_OS: ${{ matrix.os }}
+          PROJECT_VERSION: ${{ steps.config.outputs.projectVersion }}
+
+      # Uploads binary
+      - name: upload ${{ matrix.os }} image
+        uses: actions/upload-artifacts@v2
+        with:
+          name: lionrock-cli-${{ matrix.os }}
+          path: build/bin/lionrock-cli
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
