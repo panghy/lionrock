@@ -1,8 +1,8 @@
 plugins {
-    id 'org.springframework.boot' version '2.5.2'
-    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
     id 'java'
     id 'maven-publish'
+    id 'com.github.johnrengelman.shadow' version '7.0.0'
+    id "org.mikeneck.graalvm-native-image" version "1.4.1"
 }
 
 sourceCompatibility = '11'
@@ -11,14 +11,58 @@ repositories {
     mavenCentral()
 }
 
+jar {
+    manifest {
+        attributes 'Main-Class': 'io.github.panghy.lionrock.cli.LionrockShell'
+    }
+}
+
+import org.mikeneck.graalvm.BuildTypeSelector
+
+nativeImage {
+    graalVmHome = System.getProperty('java.home')
+    mainClass = "io.github.panghy.lionrock.cli.LionrockShell"
+    buildType { BuildTypeSelector build ->
+        build.executable {
+            main = 'io.github.panghy.lionrock.cli.LionrockShell'
+        }
+    }
+    executableName = 'lionrock-cli'
+    outputDirectory = file("$buildDir/bin")
+    arguments {
+        add '--no-fallback'
+        add '--report-unsupported-elements-at-runtime'
+        add '--allow-incomplete-classpath'
+
+        add '--initialize-at-build-time=ch.qos.logback.classic.Logger'
+        add '--initialize-at-build-time=ch.qos.logback.classic.Level'
+        add '--initialize-at-build-time=ch.qos.logback.core.status.InfoStatus'
+        add '--initialize-at-build-time=ch.qos.logback.core.spi.AppenderAttachableImpl'
+        add '--initialize-at-build-time=ch.qos.logback.core.status.StatusBase'
+        add '--initialize-at-build-time=org.slf4j.MDC'
+        add '--initialize-at-build-time=ch.qos.logback.core.CoreConstants'
+        add '--initialize-at-build-time=org.slf4j.LoggerFactory'
+        add '--initialize-at-build-time=org.slf4j.impl.StaticLoggerBinder'
+    }
+}
+
+generateNativeImageConfig {
+    enabled = true
+    byRunningApplicationWithoutArguments()
+}
+
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
-    implementation 'org.springframework.shell:spring-shell-starter:2.0.1.RELEASE'
-    implementation 'io.grpc:grpc-stub:1.38.0'
+    implementation 'io.grpc:grpc-stub:1.39.0'
+    implementation 'io.grpc:grpc-okhttp:1.39.0'
+
     implementation project(':lionrock-foundationdb-client')
     implementation 'org.foundationdb:fdb-java:6.2.22'
+    implementation 'info.picocli:picocli-shell-jline3:4.6.1'
+    implementation 'org.jline:jline-terminal-jansi:3.20.0'
+    implementation 'org.fusesource.jansi:jansi:2.3.3'
+    implementation 'org.jline:jline-terminal:3.20.0'
+    implementation 'ch.qos.logback:logback-classic:1.2.3'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
@@ -29,6 +73,9 @@ test {
 
 publishing {
     publications {
+        shadow(MavenPublication) { publication ->
+            project.shadow.component(publication)
+        }
         maven(MavenPublication) {
             from components.java
             pom {
@@ -64,7 +111,7 @@ publishing {
         }
         maven {
             name = "OSSRH"
-            if(project.version.endsWith('-SNAPSHOT')) {
+            if (project.version.endsWith('-SNAPSHOT')) {
                 url "https://s01.oss.sonatype.org/content/repositories/snapshots/"
             } else {
                 url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"

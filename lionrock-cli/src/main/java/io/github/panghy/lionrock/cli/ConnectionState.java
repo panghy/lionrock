@@ -7,16 +7,10 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStyle;
-import org.springframework.shell.jline.PromptProvider;
-import org.springframework.stereotype.Component;
 
-import javax.annotation.PreDestroy;
-
-@Component
-public class ConnectionState implements PromptProvider {
+public class ConnectionState {
 
   private ManagedChannel channel;
-
   private String prompt;
 
   public Database connect(String host, int port, String databaseIdentifier, String clientIdentifier) {
@@ -30,24 +24,15 @@ public class ConnectionState implements PromptProvider {
     return RemoteFoundationDBDatabaseFactory.open(databaseIdentifier, clientIdentifier, channel);
   }
 
-  @PreDestroy
-  public void shutdown() {
-    if (channel != null) {
-      channel.shutdownNow();
-    }
-  }
-
-  @Override
   public AttributedString getPrompt() {
     if (prompt == null) {
       return new AttributedString("not-connected:>",
           AttributedStyle.DEFAULT.foreground(AttributedStyle.RED));
     } else {
-      return new AttributedString(prompt + ">",
+      ConnectivityState state = channel.getState(false);
+      return new AttributedString(prompt + ":" + state + ">",
           AttributedStyle.DEFAULT.foreground(
-              channel.getState(false) == ConnectivityState.READY ?
-                  AttributedStyle.GREEN :
-                  AttributedStyle.YELLOW));
+              state == ConnectivityState.READY ? AttributedStyle.GREEN : AttributedStyle.YELLOW));
     }
   }
 }
