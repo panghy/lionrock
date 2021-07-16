@@ -24,7 +24,7 @@ COPY --from=fdb /usr/bin/fdbcli /usr/bin/
 COPY --from=fdb /var/fdb/scripts/create_cluster_file.bash /bash/
 
 ARG FDB_WEBSITE=https://www.foundationdb.org
-ARG FDB_ADDITIONAL_VERSIONS=5.1.7
+ARG FDB_ADDITIONAL_VERSIONS="5.1.7 6.2.30"
 ENV FDB_NETWORK_OPTION_EXTERNAL_CLIENT_DIRECTORY=/usr/lib/fdb-multiversion
 RUN mkdir /usr/lib/fdb-multiversion; \
 	for version in ${FDB_ADDITIONAL_VERSIONS}; do \
