@@ -2,14 +2,12 @@ package io.github.panghy.lionrock.foundationdb;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
-import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lognet.springboot.grpc.autoconfigure.GRpcServerProperties;
@@ -41,15 +39,6 @@ class UnaryOperationTests extends AbstractGrpcTest {
       }
       channel = channelBuilder.build();
     }
-  }
-
-  @AfterEach
-  public void shutdownChannel() {
-    Optional.ofNullable(channel).ifPresent(ManagedChannel::shutdownNow);
-  }
-
-  protected int getPort() {
-    return runningPort;
   }
 
   @Test

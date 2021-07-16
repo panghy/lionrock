@@ -247,7 +247,7 @@ public class LionrockShell {
     public void run() {
       checkConnectionStatus();
       db.run(tx -> {
-        System.out.println("\n Range limited to " + limit + " keys");
+        System.out.println("\nRange limited to " + limit + " keys");
         for (KeyValue next : tx.getRange(fromPrintable(start), fromPrintable(end), limit)) {
           System.out.println("`" + printable(next.getKey()) + "' is `" + printable(next.getValue()) + "'");
         }

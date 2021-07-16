@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lionrock-foundationdb-server
+spec:
+  selector:
+    matchLabels:
+      run: lionrock-foundationdb-server
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        run: lionrock-foundationdb-server
+    spec:
+      containers:
+        - name: lionrock-foundationdb-server
+          image: clementpang/lionrock-foundationdb-server:latest
+          ports:
+            - containerPort: 6565
+          resources:
+            limits:
+              cpu: 500m
+            requests:
+              cpu: 200m
+          env:
+            - name: FDB_CLUSTER_FILE
+              value: /mnt/config-volume/cluster-file
+          volumeMounts:
+            - name: config-volume
+              mountPath: /mnt/config-volume
+      volumes:
+        - name: config-volume
+          configMap:
+            name: <YOUR_CLUSTER_NAME>-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lionrock-foundationdb-server
+  labels:
+    run: lionrock-foundationdb-server
+spec:
+  ports:
+    - port: 6565
+  selector:
+    run: lionrock-foundationdb-server
