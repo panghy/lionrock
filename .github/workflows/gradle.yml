@@ -228,6 +228,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -255,8 +256,8 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Test with Gradle
-        run: ./gradlew :lionrock-foundationdb-server:build -x test
+      - name: Build with Gradle
+        run: ./gradlew :lionrock-foundationdb-server:build -x test --no-daemon
 
       - name: Build and push
         uses: docker/build-push-action@v2
