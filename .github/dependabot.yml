@@ -14,3 +14,8 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+  # Maintain dependencies for Docker
+  - package-ecosystem: "docker"
+    directory: "lionrock-foundationdb-server/"
+    schedule:
+      interval: "daily"
