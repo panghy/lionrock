@@ -363,7 +363,8 @@ public class LionrockShell {
       CommandLine cmd = new CommandLine(commands, factory).setExecutionStrategy(commands::executionStrategy);
       PicocliCommands picocliCommands = new PicocliCommands(cmd);
 
-      Parser parser = new DefaultParser();
+      DefaultParser parser = new DefaultParser();
+      parser.setEscapeChars(new char[0]);
       try (Terminal terminal = TerminalBuilder.builder().jansi(true).jna(false).build()) {
         SystemRegistry systemRegistry = new SystemRegistryImpl(parser, terminal, workDir, null);
         systemRegistry.setCommandRegistries(builtins, picocliCommands);
