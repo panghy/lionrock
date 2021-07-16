@@ -6,6 +6,8 @@ name: Gradle Build
 on:
   push:
     branches: [ master ]
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -259,9 +261,22 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew :lionrock-foundationdb-server:build -x test --no-daemon
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: clementpang/lionrock-foundationdb-server
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
           context: lionrock-foundationdb-server/
-          push: true
-          tags: clementpang/lionrock-foundationdb-server:latest
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
