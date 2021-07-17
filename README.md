@@ -114,6 +114,15 @@ Sample log output:
 2021-07-12 12:28:53.002 DEBUG [fdb-facade,60ec97f43a2e0f97d084b377b042fa3e,5e028e13152da40f] 9936 --- [     fdb-java-2] i.g.p.l.f.FoundationDbGrpcFacade         : WatchKeyRequest Completed for: hello
 ```
 
+## Deploying on Kubernetes
+
+Assuming that you have a cluster that's setup with the Foundationdb Operator:
+
+See https://github.com/panghy/lionrock/blob/master/lionrock-foundationdb-server/release/lionrock.yaml for an example on
+how you can run the server.
+
+You need to replace `<YOUR_CLUSTER_NAME>` with the name of your cluster when it was setup.
+
 # FoundationDB gRPC Client
 
 This is a drop-in client for code that otherwise would be using the original java foundationdb library (fdb-java). It
