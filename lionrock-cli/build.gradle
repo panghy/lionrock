@@ -67,7 +67,7 @@ dependencies {
     implementation 'org.jline:jline-terminal-jansi:3.20.0'
     implementation 'org.fusesource.jansi:jansi:2.3.3'
     implementation 'org.jline:jline-terminal:3.20.0'
-    implementation 'ch.qos.logback:logback-classic:1.2.3'
+    implementation 'ch.qos.logback:logback-classic:1.2.4-groovyless'
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
