@@ -37,7 +37,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew build -x test --no-daemon
+        run: ./gradlew --init-script .github/init.gradle build -x test --no-daemon
+        env:
+          BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
+          BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
+          BUILD_CACHE_PASSWORD: ${{ secrets.BUILD_CACHE_PASSWORD }}
 
       - uses: actions/upload-artifact@v2
         with:
@@ -103,7 +107,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Test with Gradle
-        run: ./gradlew test codeCoverageReport --no-daemon --info
+        run: ./gradlew --init-script .github/init.gradle test codeCoverageReport --no-daemon --info
+        env:
+          BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
+          BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
+          BUILD_CACHE_PASSWORD: ${{ secrets.BUILD_CACHE_PASSWORD }}
 
       - name: Generate JaCoCo Badge
         id: jacoco
@@ -165,11 +173,14 @@ jobs:
         run: chmod +x gradlew
 
       - name: Publish
-        run: ./gradlew publish --no-daemon -Psigning.gnupg.passphrase=${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }} -Psigning.gnupg.executable=gpg -Psigning.gnupg.keyName=${{ secrets.OSSRH_GPG_SECRET_NAME }}
+        run: ./gradlew --init-script .github/init.gradle publish --no-daemon -Psigning.gnupg.passphrase=${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }} -Psigning.gnupg.executable=gpg -Psigning.gnupg.keyName=${{ secrets.OSSRH_GPG_SECRET_NAME }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
+          BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
+          BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
+          BUILD_CACHE_PASSWORD: ${{ secrets.BUILD_CACHE_PASSWORD }}
 
       - name: Cleanup Gradle Cache
         # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
@@ -210,8 +221,11 @@ jobs:
 
       # Builds native image
       - name: "build for ${{ matrix.os }}"
-        run: ./gradlew nativeImage --no-daemon
+        run: ./gradlew --init-script .github/init.gradle nativeImage --no-daemon
         env:
+          BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
+          BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
+          BUILD_CACHE_PASSWORD: ${{ secrets.BUILD_CACHE_PASSWORD }}
           RUNNING_OS: ${{ matrix.os }}
           PROJECT_VERSION: ${{ steps.config.outputs.projectVersion }}
 
@@ -260,7 +274,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew :lionrock-foundationdb-server:build -x test --no-daemon
+        run: ./gradlew --init-script .github/init.gradle :lionrock-foundationdb-server:build -x test --no-daemon
+        env:
+          BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
+          BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
+          BUILD_CACHE_PASSWORD: ${{ secrets.BUILD_CACHE_PASSWORD }}
 
       - name: Docker meta
         id: meta
