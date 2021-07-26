@@ -20,7 +20,7 @@ jobs:
       - uses: ayltai/setup-graalvm@v1
         with:
           java-version: 11
-          graalvm-version: 21.1.0
+          graalvm-version: 21.2.0
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
@@ -89,7 +89,7 @@ jobs:
       - uses: ayltai/setup-graalvm@v1
         with:
           java-version: 11
-          graalvm-version: 21.1.0
+          graalvm-version: 21.2.0
 
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
@@ -150,7 +150,7 @@ jobs:
       - uses: ayltai/setup-graalvm@v1
         with:
           java-version: 11
-          graalvm-version: 21.1.0
+          graalvm-version: 21.2.0
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
@@ -205,7 +205,7 @@ jobs:
       - uses: ayltai/setup-graalvm@v1
         with:
           java-version: 11
-          graalvm-version: 21.1.0
+          graalvm-version: 21.2.0
           native-image: true
 
       # (Optional) Install native-image
