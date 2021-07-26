@@ -402,6 +402,31 @@ class UnaryOperationTests extends AbstractGrpcTest {
     assertArrayEquals("hello".getBytes(StandardCharsets.UTF_8), result);
   }
 
+  @Test
+  public void testGetEstimateRangeSize() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
+    stub.execute(DatabaseRequest.newBuilder().
+        setDatabaseName("fdb").setName("getEstimatedRangeSize").setClientIdentifier("unit test").
+        setGetEstimatedRangeSize(GetEstimatedRangeSizeRequest.newBuilder().
+            setStart(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            setEnd(ByteString.copyFrom("hello4", StandardCharsets.UTF_8)).
+            build()).
+        build(), streamObs);
+
+    verify(streamObs, timeout(5000).times(1)).onNext(databaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    DatabaseResponse value = databaseResponseCapture.getValue();
+    assertTrue(value.hasGetEstimatedRangeSize());
+    // we can't assert the result.
+    // assertTrue(value.getGetEstimatedRangeSize().getSize() > 0);
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));

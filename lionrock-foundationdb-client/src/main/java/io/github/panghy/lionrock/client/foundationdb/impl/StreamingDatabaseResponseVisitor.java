@@ -9,27 +9,21 @@ import io.github.panghy.lionrock.proto.*;
  */
 public interface StreamingDatabaseResponseVisitor {
 
-  default void handleGetValue(GetValueResponse resp) {
-  }
+  void handleGetValue(GetValueResponse resp);
 
-  default void handleGetKey(GetKeyResponse resp) {
-  }
+  void handleGetKey(GetKeyResponse resp);
 
-  default void handleGetRange(GetRangeResponse resp) {
-  }
+  void handleGetRange(GetRangeResponse resp);
 
-  default void handleOperationFailure(OperationFailureResponse resp) {
-  }
+  void handleOperationFailure(OperationFailureResponse resp);
 
-  default void handleGetVersionstamp(GetVersionstampResponse resp) {
-  }
+  void handleGetVersionstamp(GetVersionstampResponse resp);
 
-  default void handleGetReadVersion(GetReadVersionResponse resp) {
-  }
+  void handleGetReadVersion(GetReadVersionResponse resp);
 
-  default void handleGetWatchKey(WatchKeyResponse resp) {
-  }
+  void handleGetWatchKey(WatchKeyResponse resp);
 
-  default void handleGetApproximateSize(GetApproximateSizeResponse resp) {
-  }
+  void handleGetApproximateSize(GetApproximateSizeResponse resp);
+
+  void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp);
 }

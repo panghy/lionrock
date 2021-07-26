@@ -682,4 +682,15 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     }));
     assertEquals("world", getValue(db, HELLO_B));
   }
+
+  @Test
+  public void testGetEstimatedRangeSize() {
+    clearRangeAndCommit(db, "hello".getBytes(StandardCharsets.UTF_8),
+        "hello4".getBytes(StandardCharsets.UTF_8));
+    setupRangeTest(db);
+    long size = db.runAsync(tx ->
+        tx.getEstimatedRangeSizeBytes(HELLO_B, "hello4".getBytes(StandardCharsets.UTF_8))).join();
+    // we can't actually assert the result unfortunately.
+    // assertTrue(size > 0);
+  }
 }

@@ -328,6 +328,42 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 return completedFuture(tx);
               }), overallSpan, responseObserver, "failed to mutate key"),
           responseObserver);
+    } else if (request.hasGetEstimatedRangeSize()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "get_estimated_range_size");
+      }
+      byte[] startB = request.getGetEstimatedRangeSize().getStart().toByteArray();
+      byte[] endB = request.getGetEstimatedRangeSize().getEnd().toByteArray();
+      if (logger.isDebugEnabled()) {
+        String msg = "GetEstimatedRangeSize for start: " + printable(startB) + " end: " + printable(endB);
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
+      }
+      handleException(db.runAsync(tx -> {
+        prepareTx(request, rpcContext, tx);
+        return tx.getEstimatedRangeSizeBytes(startB, endB);
+      }), overallSpan, responseObserver, "failed to get estimated range size").thenAccept(val -> {
+        try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
+          GetEstimatedRangeSizeResponse.Builder build = GetEstimatedRangeSizeResponse.newBuilder();
+          if (logger.isDebugEnabled()) {
+            String msg = "GetEstimatedRangeSize for start: " + printable(startB) + " end: " + printable(endB) +
+                "is: " + val;
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (val != null) {
+            build.setSize(val);
+          }
+          responseObserver.onNext(DatabaseResponse.newBuilder().
+              setGetEstimatedRangeSize(build.build()).
+              build());
+          responseObserver.onCompleted();
+        }
+      });
     }
   }
 
@@ -352,6 +388,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicLong writeConflictAdds = new AtomicLong();
       private final AtomicLong getVersionstamp = new AtomicLong();
       private final AtomicLong getApproximateSize = new AtomicLong();
+      private final AtomicLong getEstimatedRangeSize = new AtomicLong();
       private volatile Transaction tx;
       /**
        * {@link CompletableFuture}s chain that is created during the livetime of the transaction but may not resolve
@@ -471,6 +508,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                       }
                       if (getApproximateSize.get() > 0) {
                         overallSpan.tag("get_approximate_size", String.valueOf(getApproximateSize.get()));
+                      }
+                      if (getEstimatedRangeSize.get() > 0) {
+                        overallSpan.tag("get_estimated_range_size", String.valueOf(getEstimatedRangeSize.get()));
                       }
                       // close the connection after all post commits are done.
                       synchronized (this) {
@@ -1035,6 +1075,60 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 synchronized (responseObserver) {
                   responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
                       setGetApproximateSize(build.build()).
+                      build());
+                }
+              }
+            } finally {
+              opScope.close();
+              opSpan.end();
+            }
+          });
+        } else if (value.hasGetEstimatedRangeSize()) {
+          byte[] startB = value.getGetEstimatedRangeSize().getStart().toByteArray();
+          byte[] endB = value.getGetEstimatedRangeSize().getEnd().toByteArray();
+          if (logger.isDebugEnabled()) {
+            String msg = "GetEstimatedRangeSize for start: " + printable(startB) + " end: " + printable(endB);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+            logger.debug(msg);
+          }
+          hasActiveTransactionOrThrow();
+          // start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_estimated_range_size");
+          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+          getEstimatedRangeSize.incrementAndGet();
+          tx.getEstimatedRangeSizeBytes(startB, endB).whenComplete((val, throwable) -> {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable,
+                    () -> "failed to get estimated range size");
+                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                    setSequenceId(value.getGetEstimatedRangeSize().getSequenceId()).
+                    setMessage(throwable.getMessage());
+                if (throwable instanceof FDBException) {
+                  builder.setCode(((FDBException) throwable).getCode());
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
+              } else {
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetEstimatedRangeSize for start: " + printable(startB) + " end: " + printable(endB) +
+                      " is: " + val;
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                GetEstimatedRangeSizeResponse.Builder build = GetEstimatedRangeSizeResponse.newBuilder().
+                    setSequenceId(value.getGetEstimatedRangeSize().getSequenceId());
+                if (val != null) {
+                  build.setSize(val);
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetEstimatedRangeSize(build.build()).
                       build());
                 }
               }
