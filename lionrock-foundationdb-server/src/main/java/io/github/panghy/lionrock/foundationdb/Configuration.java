@@ -11,9 +11,9 @@ import java.util.List;
 public class Configuration {
 
   /**
-   * The FDB version to use when initializing FDB. 620 translates to 6.20.
+   * The FDB version to use when initializing FDB.
    */
-  private int fdbVersion = 620;
+  private int fdbVersion = 630;
 
   /**
    * Controls the default fdb timeout (when no gRPC deadline is present).
