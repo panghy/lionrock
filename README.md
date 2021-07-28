@@ -171,4 +171,4 @@ docker run -p 6565:6565 clementpang/lionrock-test-server:latest
 
 Build (see above) or download the CLI from the release page and connect to it.
 
-![CLI Demo](https://github.com/panghy/lionrock/blob/master/.github/images/cli-demo.gif?raw=true "CLI Demo")
+![CLI Demo](https://github.com/panghy/lionrock/blob/master/.github/images/cli-demo2.gif?raw=true "CLI Demo")
