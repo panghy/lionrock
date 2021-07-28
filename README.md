@@ -161,4 +161,14 @@ GraalVM native-image:
 
 Use the command `connect` to connect to a remote server (defaults to localhost:6565).
 
+# Lionrock Test Server
+
+Run a self-contained Lionrock server (internally backed by FDB) to try out the server.
+
+```shell
+docker run -p 6565:6565 clementpang/lionrock-test-server:latest
+```
+
+Build (see above) or download the CLI from the release page and connect to it.
+
 ![CLI Demo](https://github.com/panghy/lionrock/blob/master/.github/images/cli-demo.gif?raw=true "CLI Demo")
