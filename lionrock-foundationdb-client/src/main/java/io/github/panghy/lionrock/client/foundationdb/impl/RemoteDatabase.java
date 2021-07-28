@@ -2,6 +2,7 @@ package io.github.panghy.lionrock.client.foundationdb.impl;
 
 import com.apple.foundationdb.Database;
 import com.apple.foundationdb.DatabaseOptions;
+import com.apple.foundationdb.EventKeeper;
 import com.apple.foundationdb.Transaction;
 import io.github.panghy.lionrock.client.foundationdb.mixins.DatabaseMixin;
 import io.github.panghy.lionrock.proto.TransactionalKeyValueStoreGrpc;
@@ -131,6 +132,14 @@ public class RemoteDatabase implements DatabaseMixin {
   @Override
   public Transaction createTransaction(Executor e) {
     return createTransaction("unnamed_transaction", e);
+  }
+
+  /**
+   * Ignores {@link EventKeeper} at this point.
+   */
+  @Override
+  public Transaction createTransaction(Executor e, EventKeeper eventKeeper) {
+    return createTransaction(e);
   }
 
   @Override

@@ -70,6 +70,9 @@ public class SequenceResponseDemuxer {
     } else if (resp.hasGetApproximateSize()) {
       ofNullable(sequenceResponseVisitors.remove(resp.getGetApproximateSize().getSequenceId())).orElse(Set.of()).
           forEach(x -> executor.execute(() -> x.handleGetApproximateSize(resp.getGetApproximateSize())));
+    } else if (resp.hasGetEstimatedRangeSize()) {
+      ofNullable(sequenceResponseVisitors.remove(resp.getGetEstimatedRangeSize().getSequenceId())).orElse(Set.of()).
+          forEach(x -> executor.execute(() -> x.handleGetEstimatedRangeSize(resp.getGetEstimatedRangeSize())));
     } else {
       throw new IllegalArgumentException("Unsupported response: " + resp);
     }

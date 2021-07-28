@@ -5,6 +5,7 @@ import com.apple.foundationdb.async.AsyncIterable;
 import com.apple.foundationdb.async.AsyncIterator;
 import com.apple.foundationdb.async.AsyncUtil;
 import io.github.panghy.lionrock.client.foundationdb.impl.StreamingDatabaseResponseVisitor;
+import io.github.panghy.lionrock.client.foundationdb.impl.StreamingDatabaseResponseVisitorStub;
 import io.github.panghy.lionrock.proto.GetRangeResponse;
 import io.github.panghy.lionrock.proto.OperationFailureResponse;
 
@@ -36,7 +37,7 @@ public class GrpcAsyncKeyValueIterable implements AsyncIterable<KeyValue> {
   @Override
   public AsyncIterator<KeyValue> iterator() {
     GrpcAsyncKeyValueIterator grpcAsyncKeyValueIterator = new GrpcAsyncKeyValueIterator(removalCallback);
-    this.getRangeSupplier.issueGetRange(new StreamingDatabaseResponseVisitor() {
+    this.getRangeSupplier.issueGetRange(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetRange(GetRangeResponse resp) {
         grpcAsyncKeyValueIterator.accept(resp);

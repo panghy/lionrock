@@ -180,6 +180,16 @@ public class RemoteTransaction implements TransactionMixin {
     }
 
     @Override
+    public CompletableFuture<Long> getEstimatedRangeSizeBytes(byte[] begin, byte[] end) {
+      return RemoteTransaction.this.getEstimatedRangeSizeBytes(begin, end);
+    }
+
+    @Override
+    public CompletableFuture<Long> getEstimatedRangeSizeBytes(Range range) {
+      return RemoteTransaction.this.getEstimatedRangeSizeBytes(range);
+    }
+
+    @Override
     public TransactionOptions options() {
       return RemoteTransaction.this.options();
     }
@@ -324,7 +334,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<byte[]> getVersionstamp() {
     assertTransactionState();
     CompletableFuture<byte[]> toReturn = newCompletableFuture();
-    long curr = registerHandler(new StreamingDatabaseResponseVisitor() {
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetVersionstamp(GetVersionstampResponse resp) {
         toReturn.completeAsync(() -> resp.getVersionstamp().toByteArray(), getExecutor());
@@ -349,7 +359,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<Long> getApproximateSize() {
     assertTransactionState();
     CompletableFuture<Long> toReturn = newCompletableFuture();
-    long curr = registerHandler(new StreamingDatabaseResponseVisitor() {
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
       @Override
       public void handleGetApproximateSize(GetApproximateSizeResponse resp) {
@@ -421,7 +431,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<Void> watch(byte[] key) throws FDBException {
     assertTransactionState();
     CompletableFuture<Void> toReturn = newCompletableFuture();
-    long curr = registerHandler(new StreamingDatabaseResponseVisitor() {
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
       @Override
       public void handleGetWatchKey(WatchKeyResponse resp) {
@@ -459,7 +469,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<Long> getReadVersion() {
     assertTransactionState();
     CompletableFuture<Long> toReturn = newCompletableFuture();
-    long curr = registerHandler(new StreamingDatabaseResponseVisitor() {
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetReadVersion(GetReadVersionResponse resp) {
         toReturn.completeAsync(resp::getReadVersion, getExecutor());
@@ -484,7 +494,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<byte[]> get(byte[] key) {
     assertTransactionState();
     CompletableFuture<byte[]> toReturn = newCompletableFuture();
-    long curr = registerHandler(new StreamingDatabaseResponseVisitor() {
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetValue(GetValueResponse resp) {
         toReturn.completeAsync(() -> resp.hasValue() ? resp.getValue().toByteArray() : null, getExecutor());
@@ -502,7 +512,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<byte[]> getKey(KeySelector selector) {
     assertTransactionState();
     CompletableFuture<byte[]> toReturn = newCompletableFuture();
-    long curr = registerHandler(new StreamingDatabaseResponseVisitor() {
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetKey(GetKeyResponse resp) {
         toReturn.completeAsync(() -> resp.hasKey() ? resp.getKey().toByteArray() : null, getExecutor());
@@ -548,6 +558,31 @@ public class RemoteTransaction implements TransactionMixin {
               build()).
           build());
     }, remoteTransactionContext.getExecutor());
+  }
+
+  @Override
+  public CompletableFuture<Long> getEstimatedRangeSizeBytes(byte[] begin, byte[] end) {
+    assertTransactionState();
+    CompletableFuture<Long> toReturn = newCompletableFuture();
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
+      @Override
+      public void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp) {
+        toReturn.completeAsync(resp::getSize, getExecutor());
+      }
+    }, toReturn);
+    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetEstimatedRangeSize(GetEstimatedRangeSizeRequest.newBuilder().
+            setSequenceId(curr).
+            setStart(ByteString.copyFrom(begin)).
+            setEnd(ByteString.copyFrom(end)).
+            build()).
+        build());
+    return toReturn;
+  }
+
+  @Override
+  public CompletableFuture<Long> getEstimatedRangeSizeBytes(Range range) {
+    return getEstimatedRangeSizeBytes(range.begin, range.end);
   }
 
   @Override
@@ -597,6 +632,11 @@ public class RemoteTransaction implements TransactionMixin {
       @Override
       public void handleGetWatchKey(WatchKeyResponse resp) {
         visitor.handleGetWatchKey(resp);
+      }
+
+      @Override
+      public void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp) {
+        visitor.handleGetEstimatedRangeSize(resp);
       }
 
       @Override

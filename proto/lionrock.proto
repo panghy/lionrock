@@ -30,6 +30,7 @@ message DatabaseRequest {
     ClearKeyRangeRequest clear_range = 10;
     MutateValueRequest mutate_value = 11;
     GetKeyRequest get_key = 12;
+    GetEstimatedRangeSizeRequest get_estimated_range_size = 13;
   }
 }
 
@@ -41,6 +42,7 @@ message DatabaseResponse {
     GetRangeResponse get_range = 2;
     GetKeyResponse get_key = 3;
     CommitTransactionResponse committed_transaction = 4;
+    GetEstimatedRangeSizeResponse get_estimated_range_size = 5;
   }
 }
 
@@ -64,6 +66,7 @@ message StreamingDatabaseRequest {
     WatchKeyRequest watch_key = 15;
     GetApproximateSizeRequest get_approximate_size = 16;
     GetKeyRequest get_key = 17;
+    GetEstimatedRangeSizeRequest get_estimated_range_size = 18;
   }
 }
 
@@ -79,6 +82,7 @@ message StreamingDatabaseResponse {
     WatchKeyResponse watch_key = 7;
     GetApproximateSizeResponse get_approximate_size = 8;
     GetKeyResponse get_key = 9;
+    GetEstimatedRangeSizeResponse get_estimated_range_size = 10;
   }
 }
 
@@ -294,6 +298,26 @@ message GetApproximateSizeResponse {
   // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
   // the approximate size of the transaction.
+  int64 size = 2;
+}
+
+// The request to get the approximate size of a range of keys.
+message GetEstimatedRangeSizeRequest {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  // the start key (inclusive) to add as a conflict key.
+  bytes start = 2;
+  // the end (exclusive) to add as a conflict key.
+  bytes end = 3;
+}
+
+// The response to get the approximate size of a range of keys
+message GetEstimatedRangeSizeResponse {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  // the approximate size of the range.
   int64 size = 2;
 }
 
