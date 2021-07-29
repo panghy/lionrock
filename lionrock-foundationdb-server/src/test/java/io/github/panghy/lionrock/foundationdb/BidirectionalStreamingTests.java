@@ -772,8 +772,8 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
     assertTrue(value.hasGetBoundaryKeys());
     assertEquals(12345, value.getGetBoundaryKeys().getSequenceId());
-    // can't really assert multiple calls.
-    assertTrue(value.getGetBoundaryKeys().getKeysCount() > 0);
+    // can't really assert multiple calls or contents.
+    // assertTrue(value.getGetBoundaryKeys().getKeysCount() > 0);
   }
 
   @Test
