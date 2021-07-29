@@ -6,6 +6,9 @@ import com.apple.foundationdb.StreamingMode;
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
 import com.apple.foundationdb.async.AsyncIterator;
+import com.apple.foundationdb.async.AsyncUtil;
+import com.apple.foundationdb.async.CloseableAsyncIterator;
+import com.google.common.base.Joiner;
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.MutationType;
 import io.github.panghy.lionrock.proto.*;
@@ -25,10 +28,7 @@ import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
@@ -364,6 +365,76 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           responseObserver.onCompleted();
         }
       });
+    } else if (request.hasGetBoundaryKeys()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "get_boundary_keys");
+      }
+      GetBoundaryKeysRequest req = request.getGetBoundaryKeys();
+      byte[] startB = req.getStart().toByteArray();
+      byte[] endB = req.getEnd().toByteArray();
+      if (logger.isDebugEnabled()) {
+        String msg = "GetBoundaryKeysRequest from: " + printable(startB) + " to: " + printable(endB);
+        logger.debug(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
+      }
+      handleException(db.runAsync(tx -> {
+            prepareTx(request, rpcContext, tx);
+            if (request.getReadVersion() > 0) {
+              tx.setReadVersion(request.getReadVersion());
+            }
+            return AsyncUtil.collectRemaining(LocalityUtil.getBoundaryKeys(tx, startB, endB));
+          }),
+          overallSpan, responseObserver, "failed to get boundary keys").thenAccept(results -> {
+        try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
+          GetBoundaryKeysResponse.Builder build = GetBoundaryKeysResponse.newBuilder();
+          if (logger.isDebugEnabled()) {
+            String msg = "GetBoundaryKeysRequest from: " + printable(startB) + " to: " + printable(endB) +
+                " got: " + results.size() + " rows";
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (overallSpan != null) {
+            overallSpan.tag("rows", String.valueOf(results.size()));
+          }
+          build.setDone(true);
+          build.addAllKeys(results.stream().map(ByteString::copyFrom).collect(Collectors.toList()));
+          responseObserver.onNext(DatabaseResponse.newBuilder().
+              setGetBoundaryKeys(build.build()).
+              build());
+          responseObserver.onCompleted();
+        }
+      });
+    } else if (request.hasGetAddressesForKey()) {
+      if (overallSpan != null) {
+        overallSpan.tag("request", "get_addresses_for_key");
+      }
+      handleException(db.runAsync(tx -> {
+        prepareTx(request, rpcContext, tx);
+        return LocalityUtil.getAddressesForKey(tx, request.getGetAddressesForKey().getKey().toByteArray());
+      }), overallSpan, responseObserver, "failed to get key").thenAccept(val -> {
+        try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
+          GetAddressesForKeyResponse.Builder build = GetAddressesForKeyResponse.newBuilder();
+          if (logger.isDebugEnabled()) {
+            String msg = "GetAddressesForKey for: " +
+                printable(request.getGetAddressesForKey().getKey().toByteArray()) + " is: " + Joiner.on(",").join(val);
+            logger.debug(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+          }
+          if (val != null) {
+            build.addAllAddresses(Arrays.stream(val).collect(Collectors.toList()));
+          }
+          responseObserver.onNext(DatabaseResponse.newBuilder().
+              setGetAddresssesForKey(build).
+              build());
+          responseObserver.onCompleted();
+        }
+      });
     }
   }
 
@@ -389,6 +460,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicLong getVersionstamp = new AtomicLong();
       private final AtomicLong getApproximateSize = new AtomicLong();
       private final AtomicLong getEstimatedRangeSize = new AtomicLong();
+      private final AtomicLong getBoundaryKeys = new AtomicLong();
+      private final AtomicLong getAddressesForKey = new AtomicLong();
       private volatile Transaction tx;
       /**
        * {@link CompletableFuture}s chain that is created during the livetime of the transaction but may not resolve
@@ -511,6 +584,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                       }
                       if (getEstimatedRangeSize.get() > 0) {
                         overallSpan.tag("get_estimated_range_size", String.valueOf(getEstimatedRangeSize.get()));
+                      }
+                      if (getBoundaryKeys.get() > 0) {
+                        overallSpan.tag("get_boundary_keys", String.valueOf(getBoundaryKeys.get()));
+                      }
+                      if (getAddressesForKey.get() > 0) {
+                        overallSpan.tag("get_addresses_for_key", String.valueOf(getAddressesForKey.get()));
                       }
                       // close the connection after all post commits are done.
                       synchronized (this) {
@@ -1129,6 +1208,165 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 synchronized (responseObserver) {
                   responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
                       setGetEstimatedRangeSize(build.build()).
+                      build());
+                }
+              }
+            } finally {
+              opScope.close();
+              opSpan.end();
+            }
+          });
+        } else if (value.hasGetBoundaryKeys()) {
+          hasActiveTransactionOrThrow();
+          getBoundaryKeys.incrementAndGet();
+          // start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_boundary_keys").start();
+          try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan.start())) {
+            GetBoundaryKeysRequest req = value.getGetBoundaryKeys();
+            byte[] startB = req.getStart().toByteArray();
+            byte[] endB = req.getEnd().toByteArray();
+            if (logger.isDebugEnabled()) {
+              String msg = "GetBoundaryKeysRequest from: " + printable(startB) + " to: " + printable(endB);
+              logger.debug(msg);
+              overallSpan.event(msg);
+            }
+            CloseableAsyncIterator<byte[]> iterator = LocalityUtil.getBoundaryKeys(tx, startB, endB);
+            // consumer that collects key values and returns them to the user.
+            AtomicLong rows = new AtomicLong();
+            AtomicLong batches = new AtomicLong();
+            BiConsumer<Boolean, Throwable> hasNextConsumer = new BiConsumer<>() {
+
+              private final List<ByteString> boundaries = new ArrayList<>();
+
+              @Override
+              public void accept(Boolean hasNext, Throwable throwable) {
+                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+                  boolean done = false;
+                  if (throwable != null) {
+                    handleThrowable(opSpan, throwable,
+                        () -> "failed to get boundary keys for start: " + printable(startB) +
+                            " end: " + printable(endB));
+                    OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                        setSequenceId(value.getGetRange().getSequenceId()).
+                        setMessage(throwable.getMessage());
+                    if (throwable instanceof FDBException) {
+                      builder.setCode(((FDBException) throwable).getCode());
+                    }
+                    iterator.close();
+                    opSpan.tag("rows_read", String.valueOf(rows.get()));
+                    opSpan.tag("batches", String.valueOf(batches.get()));
+                    opSpan.end();
+                    synchronized (responseObserver) {
+                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setOperationFailure(builder.build()).
+                          build());
+                    }
+                    return;
+                  } else if (!hasNext) {
+                    // no more rows to read, flush the last message.
+                    done = true;
+                  } else {
+                    // spool everything until the onHasNext CompletableFuture is pending.
+                    while (iterator.onHasNext().isDone() &&
+                        !iterator.onHasNext().isCompletedExceptionally()) {
+                      if (!iterator.hasNext()) {
+                        done = true;
+                        break;
+                      }
+                      byte[] next = iterator.next();
+                      rows.incrementAndGet();
+                      synchronized (boundaries) {
+                        boundaries.add(ByteString.copyFrom(next));
+                      }
+                    }
+                  }
+                  // flush what we have.
+                  flush(done);
+                  if (done) {
+                    opSpan.tag("rows_read", String.valueOf(rows.get()));
+                    opSpan.tag("batches", String.valueOf(batches.get()));
+                    opSpan.end();
+                  } else {
+                    // schedule the callback on when the future is ready.
+                    iterator.onHasNext().whenComplete(this);
+                  }
+                }
+              }
+
+              private void flush(boolean done) {
+                if (!done && boundaries.isEmpty()) {
+                  return;
+                }
+                batches.incrementAndGet();
+                rangeGetBatches.incrementAndGet();
+                rowsRead.addAndGet(boundaries.size());
+                if (logger.isDebugEnabled()) {
+                  String msg = "Flushing: " + boundaries.size() + " boundaries, done: " + done;
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetBoundaryKeys(GetBoundaryKeysResponse.newBuilder().
+                          setDone(done).
+                          addAllKeys(boundaries).
+                          setSequenceId(req.getSequenceId()).
+                          build()).
+                      build());
+                }
+                boundaries.clear();
+              }
+            };
+            iterator.onHasNext().whenComplete(hasNextConsumer);
+          }
+        } else if (value.hasGetAddressesForKey()) {
+          if (logger.isDebugEnabled()) {
+            String msg = "GetAddressesForKey on: " + printable(value.getGetAddressesForKey().getKey().toByteArray());
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
+            logger.debug(msg);
+          }
+          hasActiveTransactionOrThrow();
+          getAddressesForKey.incrementAndGet();
+          // start the span/scope for the get_value call.
+          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_addresses_for_key");
+          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+          GetAddressesForKeyRequest req = value.getGetAddressesForKey();
+          CompletableFuture<String[]> getFuture = LocalityUtil.getAddressesForKey(tx, req.getKey().toByteArray());
+          getFuture.whenComplete((val, throwable) -> {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable,
+                    () -> "failed to get addresses for key: " + printable(req.getKey().toByteArray()));
+                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                    setSequenceId(req.getSequenceId()).
+                    setMessage(throwable.getMessage());
+                if (throwable instanceof FDBException) {
+                  builder.setCode(((FDBException) throwable).getCode());
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
+              } else {
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetAddressesForKey on: " +
+                      printable(req.getKey().toByteArray()) + " is: " +
+                      Joiner.on(",").join(val);
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                rowsRead.incrementAndGet();
+                GetAddressesForKeyResponse.Builder build = GetAddressesForKeyResponse.newBuilder().
+                    setSequenceId(req.getSequenceId());
+                if (val != null) {
+                  build.addAllAddresses(Arrays.asList(val));
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetAddressesForKey(build.build()).
                       build());
                 }
               }

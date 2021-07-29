@@ -31,6 +31,8 @@ message DatabaseRequest {
     MutateValueRequest mutate_value = 11;
     GetKeyRequest get_key = 12;
     GetEstimatedRangeSizeRequest get_estimated_range_size = 13;
+    GetBoundaryKeysRequest get_boundary_keys = 14;
+    GetAddressesForKeyRequest get_addresses_for_key = 15;
   }
 }
 
@@ -43,6 +45,8 @@ message DatabaseResponse {
     GetKeyResponse get_key = 3;
     CommitTransactionResponse committed_transaction = 4;
     GetEstimatedRangeSizeResponse get_estimated_range_size = 5;
+    GetBoundaryKeysResponse get_boundary_keys = 6;
+    GetAddressesForKeyResponse get_addressses_for_key = 7;
   }
 }
 
@@ -67,6 +71,8 @@ message StreamingDatabaseRequest {
     GetApproximateSizeRequest get_approximate_size = 16;
     GetKeyRequest get_key = 17;
     GetEstimatedRangeSizeRequest get_estimated_range_size = 18;
+    GetBoundaryKeysRequest get_boundary_keys = 19;
+    GetAddressesForKeyRequest get_addresses_for_key = 20;
   }
 }
 
@@ -83,6 +89,8 @@ message StreamingDatabaseResponse {
     GetApproximateSizeResponse get_approximate_size = 8;
     GetKeyResponse get_key = 9;
     GetEstimatedRangeSizeResponse get_estimated_range_size = 10;
+    GetBoundaryKeysResponse get_boundary_keys = 11;
+    GetAddressesForKeyResponse get_addresses_for_key = 12;
   }
 }
 
@@ -319,6 +327,43 @@ message GetEstimatedRangeSizeResponse {
   int64 sequence_id = 1;
   // the approximate size of the range.
   int64 size = 2;
+}
+
+// The request to get boundary keys
+message GetBoundaryKeysRequest {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  // the beginning of the range (inclusive).
+  bytes start = 2;
+  // the end of the range (exclusive).
+  bytes end = 3;
+}
+
+// The response to get boundary keys. A single batch of many.
+message GetBoundaryKeysResponse {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  repeated bytes keys = 2;
+  bool done = 3;
+}
+
+// The request to get public network addresses as strings for a key.
+message GetAddressesForKeyRequest {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  // key
+  bytes key = 2;
+}
+
+// The response to get boundary keys
+message GetAddressesForKeyResponse {
+  // In streaming use-cases, the sequence_id is used by the client to identify a
+  // request and for the server to stream results back to that original request.
+  int64 sequence_id = 1;
+  repeated string addresses = 2;
 }
 
 // The response that's streamed back when a single async operation fails.

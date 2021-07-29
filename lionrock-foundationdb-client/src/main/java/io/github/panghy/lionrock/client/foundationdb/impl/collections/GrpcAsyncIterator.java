@@ -1,7 +1,6 @@
 package io.github.panghy.lionrock.client.foundationdb.impl.collections;
 
 import com.apple.foundationdb.FDBException;
-import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.async.AsyncIterator;
 import com.apple.foundationdb.async.AsyncUtil;
 import io.github.panghy.lionrock.proto.GetRangeResponse;
@@ -11,6 +10,8 @@ import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.stream.Stream;
 
 /**
  * An {@link AsyncIterator} backed by a gRPC call to a transaction (with streaming results coming back via the object
@@ -18,42 +19,48 @@ import java.util.concurrent.CompletableFuture;
  *
  * @author Clement Pang
  */
-public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
+public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
 
-  private final RemovalCallback removalCallback;
+  private final RemovalCallback<T> removalCallback;
   /**
    * {@link LinkedList} to store {@link GetRangeResponse}s.
    */
-  private final LinkedList<KeyValue> responses = new LinkedList<>();
+  private final LinkedList<T> responses = new LinkedList<>();
   /**
    * {@link CompletableFuture} to signal when a result is available.
    */
   private CompletableFuture<Boolean> onHasNextFuture = new CompletableFuture<>();
   private boolean done = false;
   private boolean cancelled = false;
-  private byte[] prevKey = null;
+  private T prev = null;
 
-  public GrpcAsyncKeyValueIterator(RemovalCallback removalCallback) {
+  private final Function<Resp, Stream<T>> respToStreamFunction;
+  private final Function<Resp, Boolean> isDoneFunction;
+
+  public GrpcAsyncIterator(RemovalCallback removalCallback,
+                           Function<Resp, Stream<T>> respToStreamFunction,
+                           Function<Resp, Boolean> isDoneFunction) {
     this.removalCallback = removalCallback;
+    this.respToStreamFunction = respToStreamFunction;
+    this.isDoneFunction = isDoneFunction;
   }
 
-  void accept(GetRangeResponse resp) {
+  void accept(Resp resp) {
     if (onHasNextFuture.isCompletedExceptionally()) {
       // eat the response if we have failed already.
       return;
     }
-    if (resp.getDone()) {
+    if (isDoneFunction.apply(resp)) {
       done = true;
     }
     synchronized (responses) {
       boolean wasEmpty = responses.isEmpty();
       // just adding more keys.
-      resp.getKeyValuesList().stream().
-          map(kv -> new KeyValue(kv.getKey().toByteArray(), kv.getValue().toByteArray())).
+      respToStreamFunction.apply(resp).
           forEach(responses::add);
       if (wasEmpty) {
         // waiting for key values.
-        if (resp.getDone() && responses.isEmpty()) {
+        if (isDoneFunction.apply(resp) && responses.isEmpty()) {
           onHasNextFuture.complete(false);
         } else if (!responses.isEmpty()) {
           onHasNextFuture.complete(true);
@@ -110,7 +117,7 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
   }
 
   @Override
-  public KeyValue next() {
+  public T next() {
     if (cancelled) {
       throw new CancellationException();
     }
@@ -118,8 +125,8 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
       throw new NoSuchElementException();
     }
     synchronized (responses) {
-      KeyValue keyValue = responses.removeFirst();
-      prevKey = keyValue.getKey();
+      T keyValue = responses.removeFirst();
+      prev = keyValue;
       return keyValue;
     }
   }
@@ -131,16 +138,16 @@ public class GrpcAsyncKeyValueIterator implements AsyncIterator<KeyValue> {
 
   @Override
   public void remove() {
-    if (prevKey == null) {
+    if (prev == null) {
       throw new IllegalStateException("No value has been fetched from database");
     }
-    removalCallback.deleteKey(prevKey);
+    removalCallback.deleteKey(prev);
   }
 
   /**
-   * Interface supplied to {@link GrpcAsyncKeyValueIterator} to delete a key during iteration.
+   * Interface supplied to {@link GrpcAsyncIterator} to delete a key during iteration.
    */
-  public interface RemovalCallback {
-    void deleteKey(byte[] key);
+  public interface RemovalCallback<T> {
+    void deleteKey(T key);
   }
 }

@@ -427,6 +427,53 @@ class UnaryOperationTests extends AbstractGrpcTest {
     // assertTrue(value.getGetEstimatedRangeSize().getSize() > 0);
   }
 
+  @Test
+  public void testGetBoundaryKeys() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
+    stub.execute(DatabaseRequest.newBuilder().
+        setDatabaseName("fdb").setName("getBoundaryKeys").setClientIdentifier("unit test").
+        setGetBoundaryKeys(GetBoundaryKeysRequest.newBuilder().
+            setStart(ByteString.copyFrom(new byte[]{0})).
+            setEnd(ByteString.copyFrom(new byte[]{-1})).
+            build()).
+        build(), streamObs);
+
+    verify(streamObs, timeout(5000).times(1)).onNext(databaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    DatabaseResponse value = databaseResponseCapture.getValue();
+    assertTrue(value.hasGetBoundaryKeys());
+    assertTrue(value.getGetBoundaryKeys().getKeysCount() > 0);
+  }
+
+  @Test
+  public void testGetAddressesForKey() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
+    stub.execute(DatabaseRequest.newBuilder().
+        setDatabaseName("fdb").setName("getAddressesForKey").setClientIdentifier("unit test").
+        setGetAddressesForKey(GetAddressesForKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            build()).
+        build(), streamObs);
+
+    verify(streamObs, timeout(5000).times(1)).onNext(databaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(1)).onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    DatabaseResponse value = databaseResponseCapture.getValue();
+    assertTrue(value.hasGetAddresssesForKey());
+    assertTrue(value.getGetAddresssesForKey().getAddressesCount() > 0);
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));

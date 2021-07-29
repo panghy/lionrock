@@ -1,9 +1,11 @@
 package io.github.panghy.lionrock.foundationdb.integration;
 
 import com.apple.foundationdb.*;
+import com.apple.foundationdb.async.AsyncUtil;
 import com.apple.foundationdb.tuple.Tuple;
 import com.apple.foundationdb.tuple.Versionstamp;
 import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
+import io.github.panghy.lionrock.client.foundationdb.RemoteLocalityUtil;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -692,5 +694,29 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
         tx.getEstimatedRangeSizeBytes(HELLO_B, "hello4".getBytes(StandardCharsets.UTF_8))).join();
     // we can't actually assert the result unfortunately.
     // assertTrue(size > 0);
+  }
+
+  @Test
+  public void testGetBoundaryKeys() {
+    clearRangeAndCommit(db, "hello".getBytes(StandardCharsets.UTF_8),
+        "hello4".getBytes(StandardCharsets.UTF_8));
+    setupRangeTest(db);
+    List<byte[]> join = AsyncUtil.collectRemaining(
+        RemoteLocalityUtil.getBoundaryKeys(db, new byte[]{0}, new byte[]{-1})).join();
+    assertFalse(join.isEmpty());
+
+    join = db.runAsync(tx -> AsyncUtil.collectRemaining(
+        RemoteLocalityUtil.getBoundaryKeys(tx, new byte[]{0}, new byte[]{-1}))).join();
+    assertFalse(join.isEmpty());
+  }
+
+  @Test
+  public void testGetAddressesForKey() {
+    clearRangeAndCommit(db, "hello".getBytes(StandardCharsets.UTF_8),
+        "hello4".getBytes(StandardCharsets.UTF_8));
+    setupRangeTest(db);
+    String[] join = db.runAsync(tx -> RemoteLocalityUtil.
+        getAddressesForKey(tx, "hello".getBytes(StandardCharsets.UTF_8))).join();
+    assertTrue(join.length > 0);
   }
 }
