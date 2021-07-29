@@ -20,7 +20,8 @@ FoundationDB (https://github.com/apple/foundationdb).
   configurations), as such, operations such as watches can fail when a single gRPC facade server is restarted
 * Each call to a transaction is streamed back to the server, future work to batch up mutations can be implemented for
   better performance
-* Locality APIs will not work against a RemoteTransaction (which is not an FDBTransaction)
+* Locality APIs will not work against a RemoteTransaction (which is not an FDBTransaction), a RemoteLocalityUtil
+  implementation is provided in lionrock-foundationdb-client)
 * Because the Java client still depends on fdb-java, it is possible that the native libraries will still be loaded (and
   might fail on unsupported platforms)
 * Support libraries such as Tuples are still provided in fdb-java library
@@ -127,6 +128,15 @@ You need to replace `<YOUR_CLUSTER_NAME>` with the name of your cluster when it 
 
 This is a drop-in client for code that otherwise would be using the original java foundationdb library (fdb-java). It
 depends on that library for the interface API as well as supporting libraries like Tuple.
+
+```xml
+
+<dependency>
+  <groupId>io.github.panghy.lionrock</groupId>
+  <artifactId>lionrock-foundationdb-client</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
 
 Note that you could use the client with any server that implements the lionrock protocol.
 
