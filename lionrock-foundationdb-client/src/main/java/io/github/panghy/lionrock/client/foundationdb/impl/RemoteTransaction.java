@@ -8,7 +8,7 @@ import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
 import com.apple.foundationdb.tuple.ByteArrayUtil;
 import com.google.protobuf.ByteString;
-import io.github.panghy.lionrock.client.foundationdb.impl.collections.GrpcAsyncKeyValueIterable;
+import io.github.panghy.lionrock.client.foundationdb.impl.collections.GrpcAsyncIterable;
 import io.github.panghy.lionrock.client.foundationdb.mixins.ReadTransactionMixin;
 import io.github.panghy.lionrock.client.foundationdb.mixins.TransactionMixin;
 import io.github.panghy.lionrock.proto.*;
@@ -226,9 +226,9 @@ public class RemoteTransaction implements TransactionMixin {
   public void set(byte[] key, byte[] value) {
     assertTransactionState();
     requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetValue(
-        SetValueRequest.newBuilder().
-            setKey(ByteString.copyFrom(key)).
-            setValue(ByteString.copyFrom(value)).build()).
+            SetValueRequest.newBuilder().
+                setKey(ByteString.copyFrom(key)).
+                setValue(ByteString.copyFrom(value)).build()).
         build());
   }
 
@@ -236,9 +236,9 @@ public class RemoteTransaction implements TransactionMixin {
   public void clear(byte[] key) {
     assertTransactionState();
     requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearKey(
-        ClearKeyRequest.newBuilder().
-            setKey(ByteString.copyFrom(key)).
-            build()).
+            ClearKeyRequest.newBuilder().
+                setKey(ByteString.copyFrom(key)).
+                build()).
         build());
   }
 
@@ -246,10 +246,10 @@ public class RemoteTransaction implements TransactionMixin {
   public void clear(byte[] beginKey, byte[] endKey) {
     assertTransactionState();
     requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearRange(
-        ClearKeyRangeRequest.newBuilder().
-            setStart(ByteString.copyFrom(beginKey)).
-            setEnd(ByteString.copyFrom(endKey)).
-            build()).
+            ClearKeyRangeRequest.newBuilder().
+                setStart(ByteString.copyFrom(beginKey)).
+                setEnd(ByteString.copyFrom(endKey)).
+                build()).
         build());
   }
 
@@ -302,11 +302,11 @@ public class RemoteTransaction implements TransactionMixin {
         throw new IllegalArgumentException("unsupported MutationType: " + optype);
     }
     requestSink.onNext(StreamingDatabaseRequest.newBuilder().setMutateValue(
-        MutateValueRequest.newBuilder().
-            setKey(ByteString.copyFrom(key)).
-            setParam(ByteString.copyFrom(param)).
-            setType(mutationType).
-            build()).
+            MutateValueRequest.newBuilder().
+                setKey(ByteString.copyFrom(key)).
+                setParam(ByteString.copyFrom(param)).
+                setType(mutationType).
+                build()).
         build());
   }
 
@@ -317,7 +317,7 @@ public class RemoteTransaction implements TransactionMixin {
       throw new IllegalStateException("commit already started");
     }
     requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
-        CommitTransactionRequest.newBuilder().build()).
+            CommitTransactionRequest.newBuilder().build()).
         build());
     return commitFuture;
   }
@@ -486,7 +486,7 @@ public class RemoteTransaction implements TransactionMixin {
   public void setReadVersion(long version) {
     assertTransactionState();
     requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetReadVersion(
-        SetReadVersionRequest.newBuilder().setReadVersion(version).build()).
+            SetReadVersionRequest.newBuilder().setReadVersion(version).build()).
         build());
   }
 
@@ -543,21 +543,41 @@ public class RemoteTransaction implements TransactionMixin {
         break;
     }
     io.github.panghy.lionrock.proto.StreamingMode finalStreamingMode = streamingMode;
-    return new GrpcAsyncKeyValueIterable(this::clear, callback -> {
-      assertTransactionState();
-      long curr = sequenceId.getAndIncrement();
-      demuxer.addHandler(curr, callback);
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-          setGetRange(GetRangeRequest.newBuilder().
-              setStartKeySelector(keySelector(begin)).
-              setEndKeySelector(keySelector(end)).
-              setLimit(limit).
-              setReverse(reverse).
-              setStreamingMode(finalStreamingMode).
-              setSequenceId(curr).
-              build()).
-          build());
-    }, remoteTransactionContext.getExecutor());
+    return new GrpcAsyncIterable<>(
+        // key remover
+        key -> RemoteTransaction.this.clear(key.getKey()),
+        // resp to stream of KVs
+        resp -> resp.getKeyValuesList().stream().
+            map(x -> new KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+        // resp to isDone
+        GetRangeResponse::getDone,
+        // fetch issuer
+        (responseConsumer, failureConsumer) -> {
+          assertTransactionState();
+          long curr = sequenceId.getAndIncrement();
+          demuxer.addHandler(curr, new StreamingDatabaseResponseVisitorStub() {
+            @Override
+            public void handleGetRange(GetRangeResponse resp) {
+              responseConsumer.accept(resp);
+            }
+
+            @Override
+            public void handleOperationFailure(OperationFailureResponse resp) {
+              failureConsumer.accept(resp);
+            }
+          });
+          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+              setGetRange(GetRangeRequest.newBuilder().
+                  setStartKeySelector(keySelector(begin)).
+                  setEndKeySelector(keySelector(end)).
+                  setLimit(limit).
+                  setReverse(reverse).
+                  setStreamingMode(finalStreamingMode).
+                  setSequenceId(curr).
+                  build()).
+              build());
+        },
+        remoteTransactionContext.getExecutor());
   }
 
   @Override
@@ -593,6 +613,75 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public Executor getExecutor() {
     return remoteTransactionContext.getExecutor();
+  }
+
+  /**
+   * Similar to {@code LocalityUtil.getBoundaryKeys(Transaction, byte[], byte[])}, yield an {@link AsyncIterable} for
+   * boundary keys for a range.
+   *
+   * @param start Start of the range (inclusive).
+   * @param end   End of the range (exclusive).
+   * @return Iterable of boundary keys.
+   */
+  public AsyncIterable<byte[]> getBoundaryKeys(byte[] start, byte[] end) {
+    return new GrpcAsyncIterable<>(
+        // cannot clear keys.
+        key -> {
+          throw new UnsupportedOperationException();
+        },
+        // keys to byte[]
+        resp -> resp.getKeysList().stream().map(ByteString::toByteArray),
+        // isDone for resp
+        GetBoundaryKeysResponse::getDone,
+        // fetch issuer.
+        (responseConsumer, failureConsumer) -> {
+          assertTransactionState();
+          long curr = sequenceId.getAndIncrement();
+          demuxer.addHandler(curr, new StreamingDatabaseResponseVisitorStub() {
+            @Override
+            public void handleGetBoundaryKeys(GetBoundaryKeysResponse resp) {
+              responseConsumer.accept(resp);
+            }
+
+            @Override
+            public void handleOperationFailure(OperationFailureResponse resp) {
+              failureConsumer.accept(resp);
+            }
+          });
+          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+              setGetBoundaryKeys(GetBoundaryKeysRequest.newBuilder().
+                  setStart(ByteString.copyFrom(start)).
+                  setEnd(ByteString.copyFrom(end)).
+                  setSequenceId(curr).
+                  build()).
+              build());
+        }, remoteTransactionContext.getExecutor());
+  }
+
+  /**
+   * Similar to {@code LocalityUtil#getAddressesForKey(Transaction, byte[])}, return public server addresses for
+   * storage servers that holds a particular key.
+   *
+   * @param key Key to fetch servers for.
+   * @return Storage server addresses. Implementation specific.
+   */
+  public CompletableFuture<String[]> getAddressesForKey(byte[] key) {
+    assertTransactionState();
+    CompletableFuture<String[]> toReturn = newCompletableFuture();
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
+
+      @Override
+      public void handleGetAddressesForKey(GetAddressesForKeyResponse resp) {
+        toReturn.completeAsync(() -> resp.getAddressesList().toArray(String[]::new), getExecutor());
+      }
+    }, toReturn);
+    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetAddressesForKey(GetAddressesForKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            setSequenceId(curr).
+            build()).
+        build());
+    return toReturn;
   }
 
   private long registerHandler(StreamingDatabaseResponseVisitor visitor, CompletableFuture<?> future) {
@@ -637,6 +726,16 @@ public class RemoteTransaction implements TransactionMixin {
       @Override
       public void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp) {
         visitor.handleGetEstimatedRangeSize(resp);
+      }
+
+      @Override
+      public void handleGetBoundaryKeys(GetBoundaryKeysResponse resp) {
+        visitor.handleGetBoundaryKeys(resp);
+      }
+
+      @Override
+      public void handleGetAddressesForKey(GetAddressesForKeyResponse resp) {
+        visitor.handleGetAddressesForKey(resp);
       }
 
       @Override

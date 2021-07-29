@@ -741,6 +741,74 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     // assertTrue(value.getGetEstimatedRangeSize().getSize() > 0);
   }
 
+  @Test
+  public void testGetBoundaryKeys() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("getBoundaryKeys").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetBoundaryKeys(GetBoundaryKeysRequest.newBuilder().
+            setSequenceId(12345).
+            setStart(ByteString.copyFrom(new byte[]{0})).
+            setEnd(ByteString.copyFrom(new byte[]{-1})).
+            build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(streamObs, never()).onError(any());
+
+    StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
+    assertTrue(value.hasGetBoundaryKeys());
+    assertEquals(12345, value.getGetBoundaryKeys().getSequenceId());
+    // can't really assert multiple calls or contents.
+    // assertTrue(value.getGetBoundaryKeys().getKeysCount() > 0);
+  }
+
+  @Test
+  public void testGetAddressesForKey() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+    setupRangeTest(stub);
+
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("getAddressesForKey").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetAddressesForKey(GetAddressesForKeyRequest.newBuilder().
+            setSequenceId(12345).
+            setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+            build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(streamObs, never()).onError(any());
+
+    StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
+    assertTrue(value.hasGetAddressesForKey());
+    assertEquals(12345, value.getGetAddressesForKey().getSequenceId());
+    assertTrue(value.getGetAddressesForKey().getAddressesCount() > 0);
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));

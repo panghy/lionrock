@@ -26,4 +26,8 @@ public interface StreamingDatabaseResponseVisitor {
   void handleGetApproximateSize(GetApproximateSizeResponse resp);
 
   void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp);
+
+  void handleGetBoundaryKeys(GetBoundaryKeysResponse resp);
+
+  void handleGetAddressesForKey(GetAddressesForKeyResponse resp);
 }

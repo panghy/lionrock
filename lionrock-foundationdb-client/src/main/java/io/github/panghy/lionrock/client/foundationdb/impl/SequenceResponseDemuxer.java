@@ -73,6 +73,18 @@ public class SequenceResponseDemuxer {
     } else if (resp.hasGetEstimatedRangeSize()) {
       ofNullable(sequenceResponseVisitors.remove(resp.getGetEstimatedRangeSize().getSequenceId())).orElse(Set.of()).
           forEach(x -> executor.execute(() -> x.handleGetEstimatedRangeSize(resp.getGetEstimatedRangeSize())));
+    } else if (resp.hasGetBoundaryKeys()) {
+      // getBoundaryKeys can be called multiple times until done.
+      if (resp.getGetBoundaryKeys().getDone()) {
+        ofNullable(sequenceResponseVisitors.remove(resp.getGetBoundaryKeys().getSequenceId())).orElse(Set.of()).
+            forEach(x -> executor.execute(() -> x.handleGetBoundaryKeys(resp.getGetBoundaryKeys())));
+      } else {
+        sequenceResponseVisitors.getOrDefault(resp.getGetBoundaryKeys().getSequenceId(), Set.of()).
+            forEach(x -> executor.execute(() -> x.handleGetBoundaryKeys(resp.getGetBoundaryKeys())));
+      }
+    } else if (resp.hasGetAddressesForKey()) {
+      ofNullable(sequenceResponseVisitors.remove(resp.getGetAddressesForKey().getSequenceId())).orElse(Set.of()).
+          forEach(x -> executor.execute(() -> x.handleGetAddressesForKey(resp.getGetAddressesForKey())));
     } else {
       throw new IllegalArgumentException("Unsupported response: " + resp);
     }

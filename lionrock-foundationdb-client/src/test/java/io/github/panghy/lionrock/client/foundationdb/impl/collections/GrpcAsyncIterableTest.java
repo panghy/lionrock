@@ -4,7 +4,6 @@ import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.async.AsyncIterator;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
-import io.github.panghy.lionrock.client.foundationdb.impl.StreamingDatabaseResponseVisitor;
 import io.github.panghy.lionrock.proto.GetRangeResponse;
 import io.github.panghy.lionrock.proto.OperationFailureResponse;
 import org.junit.jupiter.api.Test;
@@ -17,33 +16,39 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class GrpcAsyncKeyValueIterableTest {
+class GrpcAsyncIterableTest {
 
   @Captor
-  ArgumentCaptor<StreamingDatabaseResponseVisitor> visitorCaptor;
+  ArgumentCaptor<Consumer<GetRangeResponse>> respCaptor;
+  @Captor
+  ArgumentCaptor<Consumer<OperationFailureResponse>> failureCaptor;
 
   @Test
   void iterator() {
     // setup mocks.
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
+    GrpcAsyncIterator.RemovalCallback<KeyValue> removalCallback = mock(GrpcAsyncIterator.RemovalCallback.class);
 
-    GrpcAsyncKeyValueIterable.GetRangeSupplier getRangeSupplier = mock(GrpcAsyncKeyValueIterable.GetRangeSupplier.class);
+    GrpcAsyncIterable.FetchIssuer<GetRangeResponse> fetchIssuer = mock(GrpcAsyncIterable.FetchIssuer.class);
     Executor executor = mock(Executor.class);
 
-    GrpcAsyncKeyValueIterable iterable = new GrpcAsyncKeyValueIterable(removalCallback, getRangeSupplier, executor);
+    GrpcAsyncIterable<KeyValue, GetRangeResponse> iterable = new GrpcAsyncIterable<>(
+        removalCallback, resp -> resp.getKeyValuesList().stream().map(x ->
+        new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+        GetRangeResponse::getDone, fetchIssuer, executor);
     AsyncIterator<KeyValue> iterator = iterable.iterator();
 
-    verify(getRangeSupplier, times(1)).issueGetRange(visitorCaptor.capture());
-    StreamingDatabaseResponseVisitor value = visitorCaptor.getValue();
+    verify(fetchIssuer, times(1)).issue(respCaptor.capture(), failureCaptor.capture());
+    Consumer<GetRangeResponse> value = respCaptor.getValue();
 
     CompletableFuture<Boolean> cf = iterator.onHasNext();
     assertFalse(cf.isDone());
-    value.handleGetRange(GetRangeResponse.newBuilder().
+    value.accept(GetRangeResponse.newBuilder().
         addKeyValues(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
             setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
             setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
@@ -56,7 +61,7 @@ class GrpcAsyncKeyValueIterableTest {
 
     cf = iterator.onHasNext();
     assertFalse(cf.isDone());
-    value.handleGetRange(GetRangeResponse.newBuilder().
+    value.accept(GetRangeResponse.newBuilder().
         setDone(true).
         addKeyValues(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
             setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
@@ -72,15 +77,17 @@ class GrpcAsyncKeyValueIterableTest {
     assertTrue(cf.isDone());
     assertFalse(iterator.hasNext());
 
-    verify(removalCallback, times(1)).deleteKey(eq("hello2".getBytes(StandardCharsets.UTF_8)));
+    verify(removalCallback, times(1)).deleteKey(eq(
+        new KeyValue("hello2".getBytes(StandardCharsets.UTF_8),
+            "world2".getBytes(StandardCharsets.UTF_8))));
 
     // get another iterator.
     iterator = iterable.iterator();
-    verify(getRangeSupplier, times(2)).issueGetRange(visitorCaptor.capture());
-    value = visitorCaptor.getValue();
+    verify(fetchIssuer, times(2)).issue(respCaptor.capture(), failureCaptor.capture());
+    value = respCaptor.getValue();
     cf = iterator.onHasNext();
     assertFalse(cf.isDone());
-    value.handleGetRange(GetRangeResponse.newBuilder().
+    value.accept(GetRangeResponse.newBuilder().
         setDone(true).
         addKeyValues(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
             setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
@@ -99,26 +106,31 @@ class GrpcAsyncKeyValueIterableTest {
   @Test
   void asList() {
     // setup mocks.
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
+    GrpcAsyncIterator.RemovalCallback<KeyValue> removalCallback = mock(GrpcAsyncIterator.RemovalCallback.class);
 
-    GrpcAsyncKeyValueIterable.GetRangeSupplier getRangeSupplier = mock(GrpcAsyncKeyValueIterable.GetRangeSupplier.class);
+    GrpcAsyncIterable.FetchIssuer<GetRangeResponse> fetchIssuer = mock(GrpcAsyncIterable.FetchIssuer.class);
 
-    GrpcAsyncKeyValueIterable iterable = new GrpcAsyncKeyValueIterable(removalCallback, getRangeSupplier,
+    GrpcAsyncIterable<KeyValue, GetRangeResponse> iterable = new GrpcAsyncIterable<KeyValue, GetRangeResponse>(
+        removalCallback,
+        resp -> resp.getKeyValuesList().stream().map(x ->
+            new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+        GetRangeResponse::getDone,
+        fetchIssuer,
         MoreExecutors.directExecutor());
     CompletableFuture<List<KeyValue>> cf = iterable.asList();
     assertFalse(cf.isDone());
 
-    verify(getRangeSupplier, times(1)).issueGetRange(visitorCaptor.capture());
-    StreamingDatabaseResponseVisitor value = visitorCaptor.getValue();
+    verify(fetchIssuer, times(1)).issue(respCaptor.capture(), failureCaptor.capture());
+    Consumer<GetRangeResponse> value = respCaptor.getValue();
 
-    value.handleGetRange(GetRangeResponse.newBuilder().
+    value.accept(GetRangeResponse.newBuilder().
         addKeyValues(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
             setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
             setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
             build()).
         build());
     assertFalse(cf.isDone());
-    value.handleGetRange(GetRangeResponse.newBuilder().
+    value.accept(GetRangeResponse.newBuilder().
         setDone(true).
         addKeyValues(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
             setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
@@ -135,27 +147,34 @@ class GrpcAsyncKeyValueIterableTest {
   @Test
   void iterator_testFailure() {
     // setup mocks.
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
-    GrpcAsyncKeyValueIterable.GetRangeSupplier getRangeSupplier =
-        mock(GrpcAsyncKeyValueIterable.GetRangeSupplier.class);
+    GrpcAsyncIterator.RemovalCallback<KeyValue> removalCallback = mock(GrpcAsyncIterator.RemovalCallback.class);
 
-    GrpcAsyncKeyValueIterable iterable = new GrpcAsyncKeyValueIterable(removalCallback, getRangeSupplier,
+    GrpcAsyncIterable.FetchIssuer<GetRangeResponse> fetchIssuer = mock(GrpcAsyncIterable.FetchIssuer.class);
+
+    GrpcAsyncIterable<KeyValue, GetRangeResponse> iterable = new GrpcAsyncIterable<>(
+        removalCallback,
+        resp -> resp.getKeyValuesList().stream().map(x ->
+            new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+        GetRangeResponse::getDone,
+        fetchIssuer,
         MoreExecutors.directExecutor());
     AsyncIterator<KeyValue> iterator = iterable.iterator();
 
-    verify(getRangeSupplier, times(1)).issueGetRange(visitorCaptor.capture());
-    StreamingDatabaseResponseVisitor value = visitorCaptor.getValue();
+    verify(fetchIssuer, times(1)).issue(respCaptor.capture(), failureCaptor.capture());
+    Consumer<GetRangeResponse> value = respCaptor.getValue();
 
     CompletableFuture<Boolean> cf = iterator.onHasNext();
     assertFalse(cf.isDone());
 
-    value.handleGetRange(GetRangeResponse.newBuilder().
+    value.accept(GetRangeResponse.newBuilder().
         addKeyValues(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
             setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
             setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
             build()).
         build());
-    value.handleOperationFailure(
+
+    Consumer<OperationFailureResponse> failureResponseConsumer = failureCaptor.getValue();
+    failureResponseConsumer.accept(
         OperationFailureResponse.newBuilder().setMessage("failed!!!").setCode(123).build());
 
     assertTrue(cf.isDone());
@@ -170,20 +189,25 @@ class GrpcAsyncKeyValueIterableTest {
   @Test
   void asList_testFailure() {
     // setup mocks.
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
-    GrpcAsyncKeyValueIterable.GetRangeSupplier getRangeSupplier =
-        mock(GrpcAsyncKeyValueIterable.GetRangeSupplier.class);
+    GrpcAsyncIterator.RemovalCallback<KeyValue> removalCallback = mock(GrpcAsyncIterator.RemovalCallback.class);
 
-    GrpcAsyncKeyValueIterable iterable = new GrpcAsyncKeyValueIterable(removalCallback, getRangeSupplier,
+    GrpcAsyncIterable.FetchIssuer<GetRangeResponse> fetchIssuer = mock(GrpcAsyncIterable.FetchIssuer.class);
+
+    GrpcAsyncIterable<KeyValue, GetRangeResponse> iterable = new GrpcAsyncIterable<>(
+        removalCallback,
+        resp -> resp.getKeyValuesList().stream().map(x ->
+            new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+        GetRangeResponse::getDone,
+        fetchIssuer,
         MoreExecutors.directExecutor());
 
     CompletableFuture<List<KeyValue>> listCompletableFuture = iterable.asList();
     assertFalse(listCompletableFuture.isDone());
 
-    verify(getRangeSupplier, times(1)).issueGetRange(visitorCaptor.capture());
-    StreamingDatabaseResponseVisitor value = visitorCaptor.getValue();
+    verify(fetchIssuer, times(1)).issue(respCaptor.capture(), failureCaptor.capture());
+    Consumer<GetRangeResponse> value = respCaptor.getValue();
 
-    value.handleGetRange(GetRangeResponse.newBuilder().
+    value.accept(GetRangeResponse.newBuilder().
         addKeyValues(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
             setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
             setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
@@ -191,8 +215,10 @@ class GrpcAsyncKeyValueIterableTest {
         build());
     assertFalse(listCompletableFuture.isDone());
 
-    value.handleOperationFailure(
+    Consumer<OperationFailureResponse> failureResponseConsumer = failureCaptor.getValue();
+    failureResponseConsumer.accept(
         OperationFailureResponse.newBuilder().setMessage("failed!!!").setCode(123).build());
+
     assertTrue(listCompletableFuture.isDone());
     assertTrue(listCompletableFuture.isCompletedExceptionally());
   }

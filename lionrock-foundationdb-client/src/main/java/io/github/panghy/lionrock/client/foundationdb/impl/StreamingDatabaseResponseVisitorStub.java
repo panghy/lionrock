@@ -35,4 +35,10 @@ public interface StreamingDatabaseResponseVisitorStub extends StreamingDatabaseR
 
   default void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp) {
   }
+
+  default void handleGetBoundaryKeys(GetBoundaryKeysResponse resp) {
+  }
+
+  default void handleGetAddressesForKey(GetAddressesForKeyResponse resp) {
+  }
 }

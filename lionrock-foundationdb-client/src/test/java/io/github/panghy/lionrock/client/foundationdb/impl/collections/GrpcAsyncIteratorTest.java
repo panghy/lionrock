@@ -14,12 +14,17 @@ import java.util.concurrent.CompletableFuture;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class GrpcAsyncKeyValueIteratorTest {
+class GrpcAsyncIteratorTest {
 
   @Test
   public void testIterator() {
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
-    GrpcAsyncKeyValueIterator iterator = new GrpcAsyncKeyValueIterator(removalCallback);
+    GrpcAsyncIterator.RemovalCallback<com.apple.foundationdb.KeyValue> removalCallback =
+        mock(GrpcAsyncIterator.RemovalCallback.class);
+    GrpcAsyncIterator<com.apple.foundationdb.KeyValue, GetRangeResponse> iterator =
+        new GrpcAsyncIterator<>(removalCallback,
+            resp -> resp.getKeyValuesList().stream().map(x ->
+                new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element and dequeue (also check remove()).
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -44,7 +49,8 @@ class GrpcAsyncKeyValueIteratorTest {
     next = iterator.next();
     assertArrayEquals("hello2".getBytes(StandardCharsets.UTF_8), next.getKey());
     iterator.remove();
-    verify(removalCallback, times(1)).deleteKey(eq("hello2".getBytes(StandardCharsets.UTF_8)));
+    verify(removalCallback, times(1)).deleteKey(eq(new com.apple.foundationdb.KeyValue(
+        "hello2".getBytes(StandardCharsets.UTF_8), "world2".getBytes(StandardCharsets.UTF_8))));
 
     // add 3rd and 4th element element as separate RPC calls before dequeueing.
     cf = iterator.onHasNext();
@@ -105,8 +111,13 @@ class GrpcAsyncKeyValueIteratorTest {
 
   @Test
   public void testIterator_failure() {
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
-    GrpcAsyncKeyValueIterator iterator = new GrpcAsyncKeyValueIterator(removalCallback);
+    GrpcAsyncIterator.RemovalCallback<com.apple.foundationdb.KeyValue> removalCallback =
+        mock(GrpcAsyncIterator.RemovalCallback.class);
+    GrpcAsyncIterator<com.apple.foundationdb.KeyValue, GetRangeResponse> iterator =
+        new GrpcAsyncIterator<>(removalCallback,
+            resp -> resp.getKeyValuesList().stream().map(x ->
+                new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element.
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -158,8 +169,13 @@ class GrpcAsyncKeyValueIteratorTest {
 
   @Test
   public void testIterator_emptyResponse() {
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
-    GrpcAsyncKeyValueIterator iterator = new GrpcAsyncKeyValueIterator(removalCallback);
+    GrpcAsyncIterator.RemovalCallback<com.apple.foundationdb.KeyValue> removalCallback =
+        mock(GrpcAsyncIterator.RemovalCallback.class);
+    GrpcAsyncIterator<com.apple.foundationdb.KeyValue, GetRangeResponse> iterator =
+        new GrpcAsyncIterator<>(removalCallback,
+            resp -> resp.getKeyValuesList().stream().map(x ->
+                new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element and dequeue (also check remove()).
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -185,8 +201,13 @@ class GrpcAsyncKeyValueIteratorTest {
 
   @Test
   public void testIterator_failed() {
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
-    GrpcAsyncKeyValueIterator iterator = new GrpcAsyncKeyValueIterator(removalCallback);
+    GrpcAsyncIterator.RemovalCallback<com.apple.foundationdb.KeyValue> removalCallback =
+        mock(GrpcAsyncIterator.RemovalCallback.class);
+    GrpcAsyncIterator<com.apple.foundationdb.KeyValue, GetRangeResponse> iterator =
+        new GrpcAsyncIterator<>(removalCallback,
+            resp -> resp.getKeyValuesList().stream().map(x ->
+                new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element and dequeue (also check remove()).
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -226,8 +247,13 @@ class GrpcAsyncKeyValueIteratorTest {
 
   @Test()
   public void testIterator_cancel() {
-    GrpcAsyncKeyValueIterator.RemovalCallback removalCallback = mock(GrpcAsyncKeyValueIterator.RemovalCallback.class);
-    GrpcAsyncKeyValueIterator iterator = new GrpcAsyncKeyValueIterator(removalCallback);
+    GrpcAsyncIterator.RemovalCallback<com.apple.foundationdb.KeyValue> removalCallback =
+        mock(GrpcAsyncIterator.RemovalCallback.class);
+    GrpcAsyncIterator<com.apple.foundationdb.KeyValue, GetRangeResponse> iterator =
+        new GrpcAsyncIterator<>(removalCallback,
+            resp -> resp.getKeyValuesList().stream().map(x ->
+                new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
+            GetRangeResponse::getDone);
     try {
       // can't remove before having first fetch.
       iterator.remove();
