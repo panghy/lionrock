@@ -13,7 +13,7 @@ import java.util.function.Supplier;
 
 /**
  * Implementation of {@link FDBDatabaseFactory} that's backed by {@link RemoteFoundationDBDatabaseFactory} and talks to
- * an FDB instance not via native libraries by via gRPC.
+ * an FDB instance not via native libraries via gRPC.
  *
  * @author Clement Pang
  */
