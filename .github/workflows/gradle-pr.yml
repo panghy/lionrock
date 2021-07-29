@@ -56,13 +56,6 @@ jobs:
       - name: Test with Gradle
         run: ./gradlew test codeCoverageReport --no-daemon --info
 
-      - name: Generate JaCoCo Badge
-        id: jacoco
-        uses: cicirello/jacoco-badge-generator@v2.3.0
-        with:
-          generate-branches-badge: true
-          jacoco-csv-file: build/reports/jacoco/codeCoverageReport/codeCoverageReport.csv
-
       - name: Log coverage percentage
         run: |
           echo "coverage = ${{ steps.jacoco.outputs.coverage }}"
