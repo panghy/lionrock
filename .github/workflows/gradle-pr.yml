@@ -10,7 +10,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    needs: build
     permissions:
       contents: write
     steps:
