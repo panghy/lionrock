@@ -90,7 +90,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
           withDescription("cannot find database named: " + request.getDatabaseName()).
           asRuntimeException();
-      responseObserver.onError(toThrow);
+      synchronized (responseObserver) {
+        responseObserver.onError(toThrow);
+      }
       throw toThrow;
     }
     Context rpcContext = Context.current();
@@ -123,10 +125,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.setValue(ByteString.copyFrom(val));
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetValue(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetValue(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasGetKey()) {
@@ -159,10 +163,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.setKey(ByteString.copyFrom(val));
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetKey(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetKey(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasSetValue()) {
@@ -191,7 +197,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       }
       if (logger.isDebugEnabled()) {
         String msg = "ClearKeyRequest on: " + printable(request.getClearKey().getKey().toByteArray());
-        overallSpan.event(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
         logger.debug(msg);
       }
       handleCommittedTransaction(
@@ -256,17 +264,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       }
       StreamingMode mode = StreamingMode.ITERATOR;
       switch (req.getStreamingMode()) {
-        case ITERATOR:
-          mode = StreamingMode.ITERATOR;
-          break;
         case WANT_ALL:
           mode = StreamingMode.WANT_ALL;
           break;
         case EXACT:
           mode = StreamingMode.EXACT;
-          break;
-        case UNRECOGNIZED:
-          mode = StreamingMode.ITERATOR;
           break;
       }
       StreamingMode finalMode = mode;
@@ -299,10 +301,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
           build.addAllKeyValues(keyValues);
           build.setDone(true);
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetRange(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetRange(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasMutateValue()) {
@@ -359,10 +363,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.setSize(val);
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetEstimatedRangeSize(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetEstimatedRangeSize(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasGetBoundaryKeys()) {
@@ -402,10 +408,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
           build.setDone(true);
           build.addAllKeys(results.stream().map(ByteString::copyFrom).collect(Collectors.toList()));
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetBoundaryKeys(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetBoundaryKeys(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasGetAddressesForKey()) {
@@ -429,10 +437,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.addAllAddresses(Arrays.stream(val).collect(Collectors.toList()));
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetAddresssesForKey(build).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetAddresssesForKey(build).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     }
@@ -489,7 +499,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             String msg = "Starting transaction " + startRequest.getName() + " against db: " +
                 startRequest.getDatabaseName();
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           Database db = databaseMap.get(startRequest.getDatabaseName());
           if (db == null) {
@@ -730,7 +742,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 printable(value.getSetValue().getKey().toByteArray()) + " => " +
                 printable(value.getSetValue().getValue().toByteArray());
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           rowsWritten.incrementAndGet();
           tx.set(value.getSetValue().getKey().toByteArray(),
@@ -741,7 +755,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             String msg = "ClearKeyRequest for: " +
                 printable(value.getClearKey().getKey().toByteArray());
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           clears.incrementAndGet();
           tx.clear(value.getClearKey().getKey().toByteArray());
@@ -752,7 +768,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 printable(value.getClearRange().getStart().toByteArray()) + " => " +
                 printable(value.getClearRange().getEnd().toByteArray());
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           clears.incrementAndGet();
           tx.clear(value.getClearRange().getStart().toByteArray(),
@@ -782,21 +800,17 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
                   " limit: " + req.getLimit() + " mode: " + req.getStreamingMode();
               logger.debug(msg);
-              overallSpan.event(msg);
+              if (overallSpan != null) {
+                overallSpan.event(msg);
+              }
             }
             StreamingMode mode = StreamingMode.ITERATOR;
             switch (req.getStreamingMode()) {
-              case ITERATOR:
-                mode = StreamingMode.ITERATOR;
-                break;
               case WANT_ALL:
                 mode = StreamingMode.WANT_ALL;
                 break;
               case EXACT:
                 mode = StreamingMode.EXACT;
-                break;
-              case UNRECOGNIZED:
-                mode = StreamingMode.ITERATOR;
                 break;
             }
             AsyncIterable<KeyValue> range = req.getSnapshot() ?
@@ -965,8 +979,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   opSpan.event(msg);
                 }
                 getReadVersion.incrementAndGet();
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setGetReadVersion(GetReadVersionResponse.newBuilder().setReadVersion(val).build()).build());
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetReadVersion(GetReadVersionResponse.newBuilder().setReadVersion(val).build()).build());
+                }
               }
             } finally {
               opScope.close();
@@ -1228,7 +1244,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             if (logger.isDebugEnabled()) {
               String msg = "GetBoundaryKeysRequest from: " + printable(startB) + " to: " + printable(endB);
               logger.debug(msg);
-              overallSpan.event(msg);
+              if (overallSpan != null) {
+                overallSpan.event(msg);
+              }
             }
             CloseableAsyncIterator<byte[]> iterator = LocalityUtil.getBoundaryKeys(tx, startB, endB);
             // consumer that collects key values and returns them to the user.

@@ -27,14 +27,12 @@ configurations {
     compileOnly {
         extendsFrom annotationProcessor
     }
+    tests
+    plain
 }
 
 bootJar {
     classifier = 'boot'
-}
-
-jar {
-    enabled = false
 }
 
 dependencies {
@@ -46,7 +44,7 @@ dependencies {
 
     implementation 'io.github.lognet:grpc-spring-boot-starter:4.5.5'
     implementation project(':lionrock-proto-java')
-    implementation 'org.foundationdb:fdb-java:6.3.17'
+    implementation 'org.foundationdb:fdb-java:6.3.12'
 
     testImplementation project(':lionrock-foundationdb-client')
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -125,4 +123,14 @@ javadoc {
 signing {
     useGpgCmd()
     sign publishing.publications.bootJava
+}
+
+task testJar(type: Jar, dependsOn: testClasses) {
+    archiveBaseName = "test-${project.archivesBaseName}"
+    from sourceSets.test.output
+}
+
+artifacts {
+    tests testJar
+    plain jar
 }

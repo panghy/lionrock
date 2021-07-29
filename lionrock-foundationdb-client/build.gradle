@@ -9,6 +9,16 @@ plugins {
     id 'maven-publish'
     id 'jacoco'
     id 'signing'
+    id 'org.springframework.boot' version '2.5.3'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+}
+
+bootJar {
+    enabled = false
+}
+
+ext {
+    set('springCloudVersion', "2020.0.3")
 }
 
 java {
@@ -24,15 +34,31 @@ repositories {
 
 dependencies {
     implementation project(':lionrock-proto-java')
-    implementation 'org.foundationdb:fdb-java:6.3.17'
+    implementation 'org.foundationdb:fdb-java:6.3.12'
     implementation 'io.grpc:grpc-stub:1.39.0'
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.17.3'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.11.2'
     testImplementation 'org.mockito:mockito-junit-jupiter:3.11.2'
 
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.2'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.2'
+    testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
+    testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
+
+    // replace after refactoring.
+    testImplementation 'io.grpc:grpc-stub:1.39.0'
+    testImplementation 'io.grpc:grpc-netty:1.39.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
+    testRuntimeOnly 'io.github.lognet:grpc-spring-boot-starter:4.5.5'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
 }
 
 test {

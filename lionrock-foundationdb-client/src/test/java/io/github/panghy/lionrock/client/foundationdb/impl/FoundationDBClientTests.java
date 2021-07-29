@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.foundationdb.integration;
+package io.github.panghy.lionrock.client.foundationdb.impl;
 
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncUtil;
