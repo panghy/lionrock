@@ -3,4 +3,5 @@ include 'lionrock-proto-java'
 include 'lionrock-foundationdb-server'
 include 'lionrock-foundationdb-client'
 include 'lionrock-cli'
+include 'lionrock-fdb-record-layer-client'
 
