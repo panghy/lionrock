@@ -90,7 +90,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
           withDescription("cannot find database named: " + request.getDatabaseName()).
           asRuntimeException();
-      responseObserver.onError(toThrow);
+      synchronized (responseObserver) {
+        responseObserver.onError(toThrow);
+      }
       throw toThrow;
     }
     Context rpcContext = Context.current();
@@ -123,10 +125,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.setValue(ByteString.copyFrom(val));
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetValue(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetValue(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasGetKey()) {
@@ -159,10 +163,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.setKey(ByteString.copyFrom(val));
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetKey(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetKey(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasSetValue()) {
@@ -295,10 +301,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
           build.addAllKeyValues(keyValues);
           build.setDone(true);
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetRange(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetRange(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasMutateValue()) {
@@ -355,10 +363,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.setSize(val);
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetEstimatedRangeSize(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetEstimatedRangeSize(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasGetBoundaryKeys()) {
@@ -398,10 +408,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
           build.setDone(true);
           build.addAllKeys(results.stream().map(ByteString::copyFrom).collect(Collectors.toList()));
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetBoundaryKeys(build.build()).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetBoundaryKeys(build.build()).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     } else if (request.hasGetAddressesForKey()) {
@@ -425,10 +437,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           if (val != null) {
             build.addAllAddresses(Arrays.stream(val).collect(Collectors.toList()));
           }
-          responseObserver.onNext(DatabaseResponse.newBuilder().
-              setGetAddresssesForKey(build).
-              build());
-          responseObserver.onCompleted();
+          synchronized (responseObserver) {
+            responseObserver.onNext(DatabaseResponse.newBuilder().
+                setGetAddresssesForKey(build).
+                build());
+            responseObserver.onCompleted();
+          }
         }
       });
     }
@@ -965,8 +979,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   opSpan.event(msg);
                 }
                 getReadVersion.incrementAndGet();
-                responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                    setGetReadVersion(GetReadVersionResponse.newBuilder().setReadVersion(val).build()).build());
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetReadVersion(GetReadVersionResponse.newBuilder().setReadVersion(val).build()).build());
+                }
               }
             } finally {
               opScope.close();
@@ -1413,8 +1429,6 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
       @Override
       public void onCompleted() {
-        // if the client closes without committing, we'll close as well.
-        responseObserver.onCompleted();
         if (tx != null) {
           tx.close();
         }

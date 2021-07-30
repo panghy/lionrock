@@ -12,6 +12,7 @@ import io.github.panghy.lionrock.client.foundationdb.impl.collections.GrpcAsyncI
 import io.github.panghy.lionrock.client.foundationdb.mixins.ReadTransactionMixin;
 import io.github.panghy.lionrock.client.foundationdb.mixins.TransactionMixin;
 import io.github.panghy.lionrock.proto.*;
+import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -71,8 +72,10 @@ public class RemoteTransaction implements TransactionMixin {
         if (parameter != null) {
           builder.setParam(ByteString.copyFrom(parameter));
         }
-        requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-            setSetTransactionOption(builder.build()).build());
+        synchronized (requestSink) {
+          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+              setSetTransactionOption(builder.build()).build());
+        }
       }
     }
   });
@@ -83,7 +86,7 @@ public class RemoteTransaction implements TransactionMixin {
   private final List<CompletableFuture<?>> futures = new ArrayList<>();
   private final CompletableFuture<Void> commitFuture = newCompletableFuture();
 
-  private Throwable remoteError;
+  private volatile Throwable remoteError;
 
   public RemoteTransaction(RemoteTransactionContext remoteTransactionContext, long timeoutMs) {
     TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub = remoteTransactionContext.getStub();
@@ -91,40 +94,47 @@ public class RemoteTransaction implements TransactionMixin {
       stub = stub.withDeadlineAfter(timeoutMs, TimeUnit.MILLISECONDS);
     }
     remoteTransactionContext.incrementAttempts();
-    this.requestSink = stub.executeTransaction(new StreamObserver<>() {
-      @Override
-      public void onNext(StreamingDatabaseResponse value) {
-        //noinspection StatementWithEmptyBody
-        if (cancelled.get() || remoteError != null) {
-          // ignore if client-side cancelled or server-side errored out.
-        } else if (value.hasCommitTransaction()) {
-          commitResponse.set(value.getCommitTransaction());
-          completed.set(true);
-          commitFuture.completeAsync(() -> null, getExecutor());
-        } else {
-          demuxer.accept(value);
+    Context newContext = Context.current().fork();
+    Context origContext = newContext.attach();
+    try {
+      this.requestSink = stub.executeTransaction(new StreamObserver<>() {
+        @Override
+        public void onNext(StreamingDatabaseResponse value) {
+          if (value.hasCommitTransaction()) {
+            commitResponse.set(value.getCommitTransaction());
+            completed.set(true);
+            commitFuture.completeAsync(() -> null, getExecutor());
+          } else {
+            demuxer.accept(value);
+          }
         }
-      }
 
-      @Override
-      public void onError(Throwable t) {
-        futures.forEach(x -> x.completeExceptionally(t));
-        remoteError = t;
-      }
+        @Override
+        public void onError(Throwable t) {
+          Throwable unwrapped = unwrapFdbException(t);
+          synchronized (futures) {
+            futures.forEach(x -> x.completeExceptionally(unwrapped));
+          }
+          remoteError = unwrapped;
+        }
 
-      @Override
-      public void onCompleted() {
-        requestSink.onCompleted();
-        completed.set(true);
-      }
-    });
+        @Override
+        public void onCompleted() {
+          completed.set(true);
+        }
+      });
+    } finally {
+      newContext.detach(origContext);
+    }
     // start the transaction with the server.
-    this.requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setStartTransaction(StartTransactionRequest.newBuilder().
-            setClientIdentifier(remoteTransactionContext.getDatabase().getClientIdentifier()).
-            setDatabaseName(remoteTransactionContext.getDatabase().getDatabaseName()).
-            setName(remoteTransactionContext.getName()).
-            build()).build());
+    synchronized (requestSink) {
+      this.requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setStartTransaction(StartTransactionRequest.newBuilder().
+              setClientIdentifier(remoteTransactionContext.getDatabase().getClientIdentifier()).
+              setDatabaseName(remoteTransactionContext.getDatabase().getDatabaseName()).
+              setName(remoteTransactionContext.getName()).
+              build()).build());
+    }
     this.remoteTransactionContext = remoteTransactionContext;
     this.demuxer = new SequenceResponseDemuxer(remoteTransactionContext.getExecutor());
   }
@@ -203,54 +213,64 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void addReadConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setAddConflictRange(
-        AddConflictRangeRequest.newBuilder().
-            setStart(ByteString.copyFrom(keyBegin)).
-            setEnd(ByteString.copyFrom(keyEnd)).
-            setWrite(false).
-            build()).build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setAddConflictRange(
+          AddConflictRangeRequest.newBuilder().
+              setStart(ByteString.copyFrom(keyBegin)).
+              setEnd(ByteString.copyFrom(keyEnd)).
+              setWrite(false).
+              build()).build());
+    }
   }
 
   @Override
   public void addWriteConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setAddConflictRange(
-        AddConflictRangeRequest.newBuilder().
-            setStart(ByteString.copyFrom(keyBegin)).
-            setEnd(ByteString.copyFrom(keyEnd)).
-            setWrite(true).
-            build()).build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setAddConflictRange(
+          AddConflictRangeRequest.newBuilder().
+              setStart(ByteString.copyFrom(keyBegin)).
+              setEnd(ByteString.copyFrom(keyEnd)).
+              setWrite(true).
+              build()).build());
+    }
   }
 
   @Override
   public void set(byte[] key, byte[] value) {
     assertTransactionState();
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetValue(
-            SetValueRequest.newBuilder().
-                setKey(ByteString.copyFrom(key)).
-                setValue(ByteString.copyFrom(value)).build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetValue(
+              SetValueRequest.newBuilder().
+                  setKey(ByteString.copyFrom(key)).
+                  setValue(ByteString.copyFrom(value)).build()).
+          build());
+    }
   }
 
   @Override
   public void clear(byte[] key) {
     assertTransactionState();
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearKey(
-            ClearKeyRequest.newBuilder().
-                setKey(ByteString.copyFrom(key)).
-                build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearKey(
+              ClearKeyRequest.newBuilder().
+                  setKey(ByteString.copyFrom(key)).
+                  build()).
+          build());
+    }
   }
 
   @Override
   public void clear(byte[] beginKey, byte[] endKey) {
     assertTransactionState();
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearRange(
-            ClearKeyRangeRequest.newBuilder().
-                setStart(ByteString.copyFrom(beginKey)).
-                setEnd(ByteString.copyFrom(endKey)).
-                build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearRange(
+              ClearKeyRangeRequest.newBuilder().
+                  setStart(ByteString.copyFrom(beginKey)).
+                  setEnd(ByteString.copyFrom(endKey)).
+                  build()).
+          build());
+    }
   }
 
   @Override
@@ -301,13 +321,15 @@ public class RemoteTransaction implements TransactionMixin {
       default:
         throw new IllegalArgumentException("unsupported MutationType: " + optype);
     }
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setMutateValue(
-            MutateValueRequest.newBuilder().
-                setKey(ByteString.copyFrom(key)).
-                setParam(ByteString.copyFrom(param)).
-                setType(mutationType).
-                build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setMutateValue(
+              MutateValueRequest.newBuilder().
+                  setKey(ByteString.copyFrom(key)).
+                  setParam(ByteString.copyFrom(param)).
+                  setType(mutationType).
+                  build()).
+          build());
+    }
   }
 
   @Override
@@ -316,9 +338,11 @@ public class RemoteTransaction implements TransactionMixin {
     if (commitStarted.getAndSet(true)) {
       throw new IllegalStateException("commit already started");
     }
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
-            CommitTransactionRequest.newBuilder().build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
+              CommitTransactionRequest.newBuilder().build()).
+          build());
+    }
     return commitFuture;
   }
 
@@ -340,10 +364,12 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(() -> resp.getVersionstamp().toByteArray(), getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetVersionstamp(
-            GetVersionstampRequest.newBuilder().setSequenceId(curr).build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetVersionstamp(
+              GetVersionstampRequest.newBuilder().setSequenceId(curr).build()).
+          build());
+    }
     return toReturn;
   }
 
@@ -366,10 +392,12 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(resp::getSize, getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetApproximateSize(
-            GetApproximateSizeRequest.newBuilder().setSequenceId(curr).build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetApproximateSize(
+              GetApproximateSizeRequest.newBuilder().setSequenceId(curr).build()).
+          build());
+    }
     return toReturn;
   }
 
@@ -378,25 +406,7 @@ public class RemoteTransaction implements TransactionMixin {
     if ((e instanceof CompletionException || e instanceof ExecutionException) && e.getCause() != null) {
       e = e.getCause();
     }
-    // ununwrap an fdb error within StatusRuntimeException if necessary.
-    if (e instanceof StatusRuntimeException) {
-      Metadata trailers = ((StatusRuntimeException) e).getTrailers();
-      if (trailers != null) {
-        if (trailers.containsKey(FDB_ERROR_CODE_KEY)) {
-          String codeStr = trailers.get(FDB_ERROR_CODE_KEY);
-          String message = e.getMessage();
-          if (trailers.containsKey(FDB_ERROR_MESSAGE_KEY)) {
-            message = trailers.get(FDB_ERROR_MESSAGE_KEY);
-          }
-          int code = -1;
-          try {
-            code = Integer.parseInt(codeStr);
-          } catch (NumberFormatException ignored) {
-          }
-          e = new FDBException(message, code);
-        }
-      }
-    }
+    e = unwrapFdbException(e);
     if (!(e instanceof FDBException) || !FDBErrorCodes.isRetryable(((FDBException) e).getCode())) {
       return CompletableFuture.failedFuture(e);
     }
@@ -421,6 +431,31 @@ public class RemoteTransaction implements TransactionMixin {
                 timeleftMs == Long.MAX_VALUE ? -1 : timeLeftAfterDelayMs));
   }
 
+  public static Throwable unwrapFdbException(Throwable e) {
+    // ununwrap an fdb error within StatusRuntimeException if necessary.
+    if (e instanceof StatusRuntimeException) {
+      Metadata trailers = ((StatusRuntimeException) e).getTrailers();
+      if (trailers != null) {
+        if (trailers.containsKey(FDB_ERROR_CODE_KEY)) {
+          String codeStr = trailers.get(FDB_ERROR_CODE_KEY);
+          String message = e.getMessage();
+          if (trailers.containsKey(FDB_ERROR_MESSAGE_KEY)) {
+            message = trailers.get(FDB_ERROR_MESSAGE_KEY);
+          }
+          int code = -1;
+          try {
+            code = Integer.parseInt(codeStr);
+          } catch (NumberFormatException ignored) {
+          }
+          FDBException toReturn = new FDBException(message, code);
+          toReturn.initCause(e);
+          return toReturn;
+        }
+      }
+    }
+    return e;
+  }
+
   @Override
   public void cancel() {
     assertTransactionState();
@@ -438,11 +473,13 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(() -> null, getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setWatchKey(WatchKeyRequest.newBuilder().
-            setSequenceId(curr).
-            setKey(ByteString.copyFrom(key)).build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setWatchKey(WatchKeyRequest.newBuilder().
+              setSequenceId(curr).
+              setKey(ByteString.copyFrom(key)).build()).
+          build());
+    }
     return toReturn;
   }
 
@@ -453,6 +490,11 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void close() {
+    if (requestSink != null) {
+      synchronized (requestSink) {
+        requestSink.onCompleted();
+      }
+    }
   }
 
   @Override
@@ -475,19 +517,23 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(resp::getReadVersion, getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetReadVersion(GetReadVersionRequest.newBuilder().setSequenceId(curr).
-            build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetReadVersion(GetReadVersionRequest.newBuilder().setSequenceId(curr).
+              build()).
+          build());
+    }
     return toReturn;
   }
 
   @Override
   public void setReadVersion(long version) {
     assertTransactionState();
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetReadVersion(
-            SetReadVersionRequest.newBuilder().setReadVersion(version).build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetReadVersion(
+              SetReadVersionRequest.newBuilder().setReadVersion(version).build()).
+          build());
+    }
   }
 
   @Override
@@ -500,11 +546,13 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(() -> resp.hasValue() ? resp.getValue().toByteArray() : null, getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetValue(GetValueRequest.newBuilder().setKey(ByteString.copyFrom(key)).
-            setSequenceId(curr).
-            build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetValue(GetValueRequest.newBuilder().setKey(ByteString.copyFrom(key)).
+              setSequenceId(curr).
+              build()).
+          build());
+    }
     return toReturn;
   }
 
@@ -518,11 +566,13 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(() -> resp.hasKey() ? resp.getKey().toByteArray() : null, getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetKey(GetKeyRequest.newBuilder().setKeySelector(keySelector(selector)).
-            setSequenceId(curr).
-            build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetKey(GetKeyRequest.newBuilder().setKeySelector(keySelector(selector)).
+              setSequenceId(curr).
+              build()).
+          build());
+    }
     return toReturn;
   }
 
@@ -566,16 +616,18 @@ public class RemoteTransaction implements TransactionMixin {
               failureConsumer.accept(resp);
             }
           });
-          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-              setGetRange(GetRangeRequest.newBuilder().
-                  setStartKeySelector(keySelector(begin)).
-                  setEndKeySelector(keySelector(end)).
-                  setLimit(limit).
-                  setReverse(reverse).
-                  setStreamingMode(finalStreamingMode).
-                  setSequenceId(curr).
-                  build()).
-              build());
+          synchronized (requestSink) {
+            requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+                setGetRange(GetRangeRequest.newBuilder().
+                    setStartKeySelector(keySelector(begin)).
+                    setEndKeySelector(keySelector(end)).
+                    setLimit(limit).
+                    setReverse(reverse).
+                    setStreamingMode(finalStreamingMode).
+                    setSequenceId(curr).
+                    build()).
+                build());
+          }
         },
         remoteTransactionContext.getExecutor());
   }
@@ -590,13 +642,15 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(resp::getSize, getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetEstimatedRangeSize(GetEstimatedRangeSizeRequest.newBuilder().
-            setSequenceId(curr).
-            setStart(ByteString.copyFrom(begin)).
-            setEnd(ByteString.copyFrom(end)).
-            build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetEstimatedRangeSize(GetEstimatedRangeSizeRequest.newBuilder().
+              setSequenceId(curr).
+              setStart(ByteString.copyFrom(begin)).
+              setEnd(ByteString.copyFrom(end)).
+              build()).
+          build());
+    }
     return toReturn;
   }
 
@@ -648,13 +702,15 @@ public class RemoteTransaction implements TransactionMixin {
               failureConsumer.accept(resp);
             }
           });
-          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-              setGetBoundaryKeys(GetBoundaryKeysRequest.newBuilder().
-                  setStart(ByteString.copyFrom(start)).
-                  setEnd(ByteString.copyFrom(end)).
-                  setSequenceId(curr).
-                  build()).
-              build());
+          synchronized (requestSink) {
+            requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+                setGetBoundaryKeys(GetBoundaryKeysRequest.newBuilder().
+                    setStart(ByteString.copyFrom(start)).
+                    setEnd(ByteString.copyFrom(end)).
+                    setSequenceId(curr).
+                    build()).
+                build());
+          }
         }, remoteTransactionContext.getExecutor());
   }
 
@@ -675,12 +731,14 @@ public class RemoteTransaction implements TransactionMixin {
         toReturn.completeAsync(() -> resp.getAddressesList().toArray(String[]::new), getExecutor());
       }
     }, toReturn);
-    requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetAddressesForKey(GetAddressesForKeyRequest.newBuilder().
-            setKey(ByteString.copyFrom(key)).
-            setSequenceId(curr).
-            build()).
-        build());
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetAddressesForKey(GetAddressesForKeyRequest.newBuilder().
+              setKey(ByteString.copyFrom(key)).
+              setSequenceId(curr).
+              build()).
+          build());
+    }
     return toReturn;
   }
 
