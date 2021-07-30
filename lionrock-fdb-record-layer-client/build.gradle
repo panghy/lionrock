@@ -5,6 +5,7 @@ plugins {
     id 'signing'
     id 'org.springframework.boot' version '2.5.3'
     id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id "com.google.protobuf" version "0.8.17"
 }
 
 ext {
@@ -17,6 +18,10 @@ repositories {
         name 'sonatype-snapshot'
         url 'https://s01.oss.sonatype.org/content/repositories/snapshots'
     }
+}
+
+bootJar {
+    enabled = false
 }
 
 dependencies {
@@ -107,4 +112,10 @@ javadoc {
 signing {
     useGpgCmd()
     sign publishing.publications.mavenJava
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.17.3'
+    }
 }
