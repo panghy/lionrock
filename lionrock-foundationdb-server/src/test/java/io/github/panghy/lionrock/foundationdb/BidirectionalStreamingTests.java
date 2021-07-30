@@ -766,7 +766,7 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
             build()).
         build());
 
-    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).atLeastOnce()).onNext(streamingDatabaseResponseCapture.capture());
     verify(streamObs, never()).onError(any());
 
     StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
