@@ -27,14 +27,12 @@ configurations {
     compileOnly {
         extendsFrom annotationProcessor
     }
+    tests
+    plain
 }
 
 bootJar {
     classifier = 'boot'
-}
-
-jar {
-    enabled = false
 }
 
 dependencies {
@@ -125,4 +123,14 @@ javadoc {
 signing {
     useGpgCmd()
     sign publishing.publications.bootJava
+}
+
+task testJar(type: Jar, dependsOn: testClasses) {
+    archiveBaseName = "test-${project.archivesBaseName}"
+    from sourceSets.test.output
+}
+
+artifacts {
+    tests testJar
+    plain jar
 }

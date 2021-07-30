@@ -191,7 +191,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       }
       if (logger.isDebugEnabled()) {
         String msg = "ClearKeyRequest on: " + printable(request.getClearKey().getKey().toByteArray());
-        overallSpan.event(msg);
+        if (overallSpan != null) {
+          overallSpan.event(msg);
+        }
         logger.debug(msg);
       }
       handleCommittedTransaction(
@@ -256,17 +258,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       }
       StreamingMode mode = StreamingMode.ITERATOR;
       switch (req.getStreamingMode()) {
-        case ITERATOR:
-          mode = StreamingMode.ITERATOR;
-          break;
         case WANT_ALL:
           mode = StreamingMode.WANT_ALL;
           break;
         case EXACT:
           mode = StreamingMode.EXACT;
-          break;
-        case UNRECOGNIZED:
-          mode = StreamingMode.ITERATOR;
           break;
       }
       StreamingMode finalMode = mode;
@@ -489,7 +485,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             String msg = "Starting transaction " + startRequest.getName() + " against db: " +
                 startRequest.getDatabaseName();
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           Database db = databaseMap.get(startRequest.getDatabaseName());
           if (db == null) {
@@ -730,7 +728,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 printable(value.getSetValue().getKey().toByteArray()) + " => " +
                 printable(value.getSetValue().getValue().toByteArray());
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           rowsWritten.incrementAndGet();
           tx.set(value.getSetValue().getKey().toByteArray(),
@@ -741,7 +741,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             String msg = "ClearKeyRequest for: " +
                 printable(value.getClearKey().getKey().toByteArray());
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           clears.incrementAndGet();
           tx.clear(value.getClearKey().getKey().toByteArray());
@@ -752,7 +754,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 printable(value.getClearRange().getStart().toByteArray()) + " => " +
                 printable(value.getClearRange().getEnd().toByteArray());
             logger.debug(msg);
-            overallSpan.event(msg);
+            if (overallSpan != null) {
+              overallSpan.event(msg);
+            }
           }
           clears.incrementAndGet();
           tx.clear(value.getClearRange().getStart().toByteArray(),
@@ -782,21 +786,17 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
                   " limit: " + req.getLimit() + " mode: " + req.getStreamingMode();
               logger.debug(msg);
-              overallSpan.event(msg);
+              if (overallSpan != null) {
+                overallSpan.event(msg);
+              }
             }
             StreamingMode mode = StreamingMode.ITERATOR;
             switch (req.getStreamingMode()) {
-              case ITERATOR:
-                mode = StreamingMode.ITERATOR;
-                break;
               case WANT_ALL:
                 mode = StreamingMode.WANT_ALL;
                 break;
               case EXACT:
                 mode = StreamingMode.EXACT;
-                break;
-              case UNRECOGNIZED:
-                mode = StreamingMode.ITERATOR;
                 break;
             }
             AsyncIterable<KeyValue> range = req.getSnapshot() ?
@@ -1228,7 +1228,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             if (logger.isDebugEnabled()) {
               String msg = "GetBoundaryKeysRequest from: " + printable(startB) + " to: " + printable(endB);
               logger.debug(msg);
-              overallSpan.event(msg);
+              if (overallSpan != null) {
+                overallSpan.event(msg);
+              }
             }
             CloseableAsyncIterator<byte[]> iterator = LocalityUtil.getBoundaryKeys(tx, startB, endB);
             // consumer that collects key values and returns them to the user.

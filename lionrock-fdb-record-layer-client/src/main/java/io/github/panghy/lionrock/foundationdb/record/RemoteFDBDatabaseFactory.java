@@ -17,7 +17,7 @@ import java.util.function.Supplier;
  *
  * @author Clement Pang
  */
-public class RemoteFDBDatabaseFactory extends AbstractFDBDatabaseFactory {
+public class RemoteFDBDatabaseFactory extends FDBDatabaseFactoryBase {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RemoteFDBDatabaseFactory.class);
 
@@ -112,6 +112,9 @@ public class RemoteFDBDatabaseFactory extends AbstractFDBDatabaseFactory {
   @Nonnull
   @Override
   public Database open(String databaseName) {
+    if (databaseName == null) {
+      databaseName = "fdb";
+    }
     return RemoteFoundationDBDatabaseFactory.open(databaseName, clientIdentifier, channel);
   }
 }
