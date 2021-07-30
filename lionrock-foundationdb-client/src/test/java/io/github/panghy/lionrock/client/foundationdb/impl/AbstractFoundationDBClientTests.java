@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.foundationdb.integration;
+package io.github.panghy.lionrock.client.foundationdb.impl;
 
 import com.apple.foundationdb.Database;
 import com.apple.foundationdb.KeySelector;
@@ -6,10 +6,12 @@ import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.Transaction;
 import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
 import io.github.panghy.lionrock.foundationdb.AbstractGrpcTest;
+import io.github.panghy.lionrock.foundationdb.FoundationDbGrpcFacade;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -17,7 +19,10 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE;
 
+@SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=0",
+    "logging.level.io.github.panghy.lionrock=DEBUG"}, classes = FoundationDbGrpcFacade.class)
 public class AbstractFoundationDBClientTests extends AbstractGrpcTest {
 
   static final byte[] HELLO_B = "hello".getBytes(StandardCharsets.UTF_8);
