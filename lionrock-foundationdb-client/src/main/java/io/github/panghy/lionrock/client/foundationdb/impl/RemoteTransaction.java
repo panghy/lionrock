@@ -11,7 +11,6 @@ import io.github.panghy.lionrock.client.foundationdb.impl.collections.GrpcAsyncI
 import io.github.panghy.lionrock.client.foundationdb.mixins.ReadTransactionMixin;
 import io.github.panghy.lionrock.client.foundationdb.mixins.TransactionMixin;
 import io.github.panghy.lionrock.proto.*;
-import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -65,6 +64,21 @@ public class RemoteTransaction implements TransactionMixin {
         // timeout.
         long timeoutMs = ByteBuffer.wrap(parameter).order(ByteOrder.LITTLE_ENDIAN).getLong();
         remoteTransactionContext.setTimeout(timeoutMs);
+        // we'll set the time-left on the server transaction too.
+        long millisecondsLeft = remoteTransactionContext.getMillisecondsLeft();
+        if (millisecondsLeft <= 0) {
+          millisecondsLeft = 1;
+        }
+        SetTransactionOptionRequest.Builder builder = SetTransactionOptionRequest.newBuilder().
+            setOption(code);
+        ByteBuffer b = ByteBuffer.allocate(8);
+        b.order(ByteOrder.LITTLE_ENDIAN);
+        b.putLong(millisecondsLeft);
+        builder.setParam(ByteString.copyFrom(b.array()));
+        synchronized (requestSink) {
+          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+              setSetTransactionOption(builder.build()).build());
+        }
       } else if (code == 501) {
         long retryLimit = ByteBuffer.wrap(parameter).order(ByteOrder.LITTLE_ENDIAN).getLong();
         remoteTransactionContext.setRetryLimit(retryLimit);
@@ -94,7 +108,7 @@ public class RemoteTransaction implements TransactionMixin {
   /**
    * Whether this is a read-only transaction. Versionstamp fetches and commit version can be optimized.
    */
-  private final AtomicBoolean readOnlyTx = new AtomicBoolean(false);
+  private final AtomicBoolean readOnlyTx = new AtomicBoolean(true);
 
   private volatile Throwable remoteError;
 
@@ -104,48 +118,42 @@ public class RemoteTransaction implements TransactionMixin {
       stub = stub.withDeadlineAfter(timeoutMs, TimeUnit.MILLISECONDS);
     }
     remoteTransactionContext.incrementAttempts();
-    Context newContext = Context.current().fork();
-    Context origContext = newContext.attach();
-    try {
-      this.requestSink = stub.executeTransaction(new StreamObserver<>() {
-        @Override
-        public void onNext(StreamingDatabaseResponse value) {
-          if (value.hasCommitTransaction()) {
-            commitResponse.set(value.getCommitTransaction());
-            completed.set(true);
-            commitFuture.complete(null);
-          } else {
-            demuxer.accept(value);
-          }
-        }
-
-        @Override
-        public void onError(Throwable t) {
-          // if the server error-ed out, fail all outstanding future.
-          Throwable unwrapped = unwrapFdbException(t);
-          synchronized (futures) {
-            futures.forEach(x -> x.completeExceptionally(unwrapped));
-          }
-          commitFuture.completeExceptionally(unwrapped);
-          remoteError = unwrapped;
-        }
-
-        @Override
-        public void onCompleted() {
-          synchronized (futures) {
-            // internal error if any future is still outstanding but the server left.
-            futures.forEach(x -> {
-              if (!x.isDone()) {
-                x.completeExceptionally(new FDBException("server_left, dangling future: " + x, 4100));
-              }
-            });
-          }
+    this.requestSink = stub.executeTransaction(new StreamObserver<>() {
+      @Override
+      public void onNext(StreamingDatabaseResponse value) {
+        if (value.hasCommitTransaction()) {
+          commitResponse.set(value.getCommitTransaction());
           completed.set(true);
+          commitFuture.complete(null);
+        } else {
+          demuxer.accept(value);
         }
-      });
-    } finally {
-      newContext.detach(origContext);
-    }
+      }
+
+      @Override
+      public void onError(Throwable t) {
+        // if the server error-ed out, fail all outstanding future.
+        Throwable unwrapped = unwrapFdbException(t);
+        synchronized (futures) {
+          futures.forEach(x -> x.completeExceptionally(unwrapped));
+        }
+        commitFuture.completeExceptionally(unwrapped);
+        remoteError = unwrapped;
+      }
+
+      @Override
+      public void onCompleted() {
+        synchronized (futures) {
+          // internal error if any future is still outstanding but the server left.
+          futures.forEach(x -> {
+            if (!x.isDone()) {
+              x.completeExceptionally(new FDBException("server_left, dangling future: " + x, 4100));
+            }
+          });
+        }
+        completed.set(true);
+      }
+    });
     // start the transaction with the server.
     synchronized (requestSink) {
       this.requestSink.onNext(StreamingDatabaseRequest.newBuilder().
@@ -154,6 +162,21 @@ public class RemoteTransaction implements TransactionMixin {
               setDatabaseName(remoteTransactionContext.getDatabase().getDatabaseName()).
               setName(remoteTransactionContext.getName()).
               build()).build());
+      // set the timeout on the transaction if we have one.
+      long millisecondsLeft = remoteTransactionContext.getMillisecondsLeft();
+      if (millisecondsLeft != Long.MAX_VALUE) {
+        if (millisecondsLeft <= 0) millisecondsLeft = 1;
+        SetTransactionOptionRequest.Builder builder = SetTransactionOptionRequest.newBuilder().
+            setOption(500);
+        ByteBuffer b = ByteBuffer.allocate(8);
+        b.order(ByteOrder.LITTLE_ENDIAN);
+        b.putLong(millisecondsLeft);
+        builder.setParam(ByteString.copyFrom(b.array()));
+        synchronized (requestSink) {
+          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+              setSetTransactionOption(builder.build()).build());
+        }
+      }
     }
     this.remoteTransactionContext = remoteTransactionContext;
     this.demuxer = new SequenceResponseDemuxer(remoteTransactionContext.getExecutor());
@@ -365,6 +388,8 @@ public class RemoteTransaction implements TransactionMixin {
     }
     if (readOnlyTx.get()) {
       versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
+      completed.set(true);
+      commitFuture.complete(null);
     } else {
       // request Versionstamp.
       long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
@@ -379,11 +404,11 @@ public class RemoteTransaction implements TransactionMixin {
                 GetVersionstampRequest.newBuilder().setSequenceId(curr).build()).
             build());
       }
-    }
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
-              CommitTransactionRequest.newBuilder().build()).
-          build());
+      synchronized (requestSink) {
+        requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
+                CommitTransactionRequest.newBuilder().build()).
+            build());
+      }
     }
     return commitFuture;
   }
