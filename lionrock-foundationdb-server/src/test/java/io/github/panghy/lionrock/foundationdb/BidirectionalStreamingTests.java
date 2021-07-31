@@ -35,7 +35,6 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     StreamingDatabaseRequestStreamObserver.onNext(request);
     StreamingDatabaseRequestStreamObserver.onCompleted();
 
-    verify(streamObs, timeout(5000).times(1)).onCompleted();
     verify(streamObs, never()).onError(any());
   }
 
@@ -104,7 +103,6 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
     verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     streamingDatabaseRequestStreamObserver.onCompleted();
-    verify(streamObs, timeout(5000).times(1)).onCompleted();
     verify(streamObs, never()).onError(any());
 
     StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
@@ -475,7 +473,6 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
     verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     serverStub.onCompleted();
-    verify(streamObs, timeout(5000).times(1)).onCompleted();
     verify(streamObs, never()).onError(any());
 
     response = streamingDatabaseResponseCapture.getValue();
@@ -556,7 +553,6 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
     verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
     serverStub.onCompleted();
-    verify(streamObs, timeout(5000).times(1)).onCompleted();
     verify(streamObs, never()).onError(any());
 
     StreamingDatabaseResponse value = streamingDatabaseResponseCapture.getValue();
@@ -647,7 +643,6 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     assertTrue(gotVersionstamp);
 
     serverStub.onCompleted();
-    verify(streamObs, timeout(5000).times(1)).onCompleted();
     verify(streamObs, never()).onError(any());
 
     // read the key back.

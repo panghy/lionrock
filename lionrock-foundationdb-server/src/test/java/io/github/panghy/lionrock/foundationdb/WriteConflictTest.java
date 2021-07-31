@@ -239,9 +239,8 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
-    verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx2Observer, timeout(10000).times(2)).onNext(streamingDatabaseResponseCapture.capture());
     tx2Stub.onCompleted();
-    verify(tx2Observer, timeout(10000).times(1)).onCompleted();
     verify(tx2Observer, never()).onError(any());
 
     // now if we commit tx1, it should conflict and fail.
@@ -313,9 +312,8 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
     tx2Stub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
-    verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(tx2Observer, timeout(10000).times(2)).onNext(streamingDatabaseResponseCapture.capture());
     tx2Stub.onCompleted();
-    verify(tx2Observer, timeout(10000).times(1)).onCompleted();
     verify(tx2Observer, never()).onError(any());
 
     // now if we commit tx1, it should conflict and fail.
