@@ -102,9 +102,9 @@ public class SequenceResponseDemuxer {
   private StreamingDatabaseResponseVisitor getVistorOrThrow(long sequenceId) {
     if (!sequenceResponseVisitors.containsKey(sequenceId)) {
       if (knownSequenceIds.contains(sequenceId)) {
-        throw new IllegalStateException("sequenceId: " + sequenceId + " already removed by prior callback");
+        throw new IllegalArgumentException("sequenceId: " + sequenceId + " already removed by prior callback");
       }
-      throw new IllegalStateException("Unknown sequenceId: " + sequenceId);
+      throw new IllegalArgumentException("Unknown sequenceId: " + sequenceId);
     }
     return sequenceResponseVisitors.get(sequenceId);
   }
@@ -112,9 +112,9 @@ public class SequenceResponseDemuxer {
   private StreamingDatabaseResponseVisitor removeVistorOrThrow(long sequenceId) {
     if (!sequenceResponseVisitors.containsKey(sequenceId)) {
       if (knownSequenceIds.contains(sequenceId)) {
-        throw new IllegalStateException("sequenceId: " + sequenceId + " already removed by prior callback");
+        throw new IllegalArgumentException("sequenceId: " + sequenceId + " already removed by prior callback");
       }
-      throw new IllegalStateException("Unknown sequenceId: " + sequenceId);
+      throw new IllegalArgumentException("Unknown sequenceId: " + sequenceId);
     }
     return sequenceResponseVisitors.remove(sequenceId);
   }

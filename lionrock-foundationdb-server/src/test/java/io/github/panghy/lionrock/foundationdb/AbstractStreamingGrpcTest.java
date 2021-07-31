@@ -179,6 +179,7 @@ public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
         build());
 
     verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
     verify(streamObs, timeout(5000).times(1)).onCompleted();
     verify(streamObs, never()).onError(any());
 

@@ -15,20 +15,30 @@ class SequenceResponseDemuxerTest {
     SequenceResponseDemuxer demuxer = new SequenceResponseDemuxer(MoreExecutors.directExecutor());
 
     StreamingDatabaseResponseVisitor visitor = mock(StreamingDatabaseResponseVisitor.class);
-    demuxer.addHandler(123, visitor);
+    long seqId = demuxer.addHandler(visitor);
     StreamingDatabaseResponseVisitor visitor2 = mock(StreamingDatabaseResponseVisitor.class);
-    demuxer.addHandler(123, visitor2);
+    long seqId2 = demuxer.addHandler(visitor2);
 
     demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetValue(GetValueResponse.newBuilder().setSequenceId(123).build()).
+        setGetValue(GetValueResponse.newBuilder().setSequenceId(seqId).build()).
         build());
-    // sequence id is respected.
+    // throws on unknown id
+    try {
+      demuxer.accept(StreamingDatabaseResponse.newBuilder().
+          setGetValue(GetValueResponse.newBuilder().setSequenceId(1).build()).
+          build());
+    } catch (IllegalArgumentException expected) {
+    }
+    // duplicate calls throws.
+    try {
+      demuxer.accept(StreamingDatabaseResponse.newBuilder().
+          setGetValue(GetValueResponse.newBuilder().setSequenceId(seqId).build()).
+          build());
+    } catch (IllegalArgumentException expected) {
+    }
+    // accepts second handler.
     demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetValue(GetValueResponse.newBuilder().setSequenceId(1).build()).
-        build());
-    // second call is ignored.
-    demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetValue(GetValueResponse.newBuilder().setSequenceId(123).build()).
+        setGetValue(GetValueResponse.newBuilder().setSequenceId(seqId2).build()).
         build());
 
     verify(visitor, times(1)).handleGetValue(any());
@@ -40,31 +50,36 @@ class SequenceResponseDemuxerTest {
     SequenceResponseDemuxer demuxer = new SequenceResponseDemuxer(MoreExecutors.directExecutor());
 
     StreamingDatabaseResponseVisitor visitor = mock(StreamingDatabaseResponseVisitor.class);
-    demuxer.addHandler(123, visitor);
-    StreamingDatabaseResponseVisitor visitor2 = mock(StreamingDatabaseResponseVisitor.class);
-    demuxer.addHandler(123, visitor2);
+    long seqId = demuxer.addHandler(visitor);
 
     demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetRange(GetRangeResponse.newBuilder().setSequenceId(123).build()).
+        setGetRange(GetRangeResponse.newBuilder().setSequenceId(seqId).build()).
         build());
-    // sequence id is respected.
-    demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetRange(GetRangeResponse.newBuilder().setSequenceId(1).build()).
-        build());
+    // throws on unknown id
+    try {
+      demuxer.accept(StreamingDatabaseResponse.newBuilder().
+          setGetValue(GetValueResponse.newBuilder().setSequenceId(1).build()).
+          build());
+    } catch (IllegalArgumentException expected) {
+    }
     // second call is not ignored.
     demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetRange(GetRangeResponse.newBuilder().setSequenceId(123).build()).
+        setGetRange(GetRangeResponse.newBuilder().setSequenceId(seqId).build()).
         build());
     // third call is not ignored.
     demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetRange(GetRangeResponse.newBuilder().setSequenceId(123).setDone(true).build()).
+        setGetRange(GetRangeResponse.newBuilder().setSequenceId(seqId).setDone(true).build()).
         build());
     // fourth call is ignored.
-    demuxer.accept(StreamingDatabaseResponse.newBuilder().
-        setGetRange(GetRangeResponse.newBuilder().setSequenceId(123).setDone(true).build()).
-        build());
+
+    // duplicate calls throws.
+    try {
+      demuxer.accept(StreamingDatabaseResponse.newBuilder().
+          setGetRange(GetRangeResponse.newBuilder().setSequenceId(seqId).setDone(true).build()).
+          build());
+    } catch (IllegalArgumentException expected) {
+    }
 
     verify(visitor, times(3)).handleGetRange(any());
-    verify(visitor2, times(3)).handleGetRange(any());
   }
 }
