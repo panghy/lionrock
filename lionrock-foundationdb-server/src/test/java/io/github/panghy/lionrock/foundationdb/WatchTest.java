@@ -69,6 +69,5 @@ class WatchTest extends AbstractStreamingGrpcTest {
     verify(tx1Observer, never()).onError(any());
     // now it closes.
     tx1Stub.onCompleted();
-    verify(tx1Observer, timeout(5000).times(1)).onCompleted();
   }
 }

@@ -1319,8 +1319,6 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       public void onCompleted() {
         logger.debug("client onCompleted()");
         populateOverallSpanStats();
-        // if the client closes without committing, we'll close as well.
-        responseObserver.onCompleted();
         longLivingFutures.forEach(x -> x.cancel(false));
         if (tx != null) {
           tx.close();
