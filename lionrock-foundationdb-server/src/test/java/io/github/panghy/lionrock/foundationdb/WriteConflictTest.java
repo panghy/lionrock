@@ -240,6 +240,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
     verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    tx2Stub.onCompleted();
     verify(tx2Observer, timeout(10000).times(1)).onCompleted();
     verify(tx2Observer, never()).onError(any());
 
@@ -313,6 +314,7 @@ class WriteConflictTest extends AbstractStreamingGrpcTest {
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
     verify(tx2Observer, timeout(10000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    tx2Stub.onCompleted();
     verify(tx2Observer, timeout(10000).times(1)).onCompleted();
     verify(tx2Observer, never()).onError(any());
 

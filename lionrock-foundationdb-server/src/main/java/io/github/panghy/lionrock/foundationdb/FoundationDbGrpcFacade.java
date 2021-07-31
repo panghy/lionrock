@@ -391,7 +391,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             if (request.getReadVersion() > 0) {
               tx.setReadVersion(request.getReadVersion());
             }
-            return AsyncUtil.collectRemaining(LocalityUtil.getBoundaryKeys(tx, startB, endB));
+            CloseableAsyncIterator<byte[]> boundaryKeys = LocalityUtil.getBoundaryKeys(tx, startB, endB);
+            return AsyncUtil.collectRemaining(boundaryKeys).
+                whenComplete((bytes, throwable) -> {
+                  boundaryKeys.close();
+                });
           }),
           overallSpan, responseObserver, "failed to get boundary keys").thenAccept(results -> {
         try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
@@ -1195,6 +1199,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   // flush what we have.
                   flush(done);
                   if (done) {
+                    iterator.close();
                     opSpan.tag("rows_read", String.valueOf(rows.get()));
                     opSpan.tag("batches", String.valueOf(batches.get()));
                     opSpan.end();

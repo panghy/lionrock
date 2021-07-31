@@ -68,6 +68,7 @@ class WatchTest extends AbstractStreamingGrpcTest {
     assertEquals(12345, tx1bCapture.getAllValues().get(1).getWatchKey().getSequenceId());
     verify(tx1Observer, never()).onError(any());
     // now it closes.
+    tx1Stub.onCompleted();
     verify(tx1Observer, timeout(5000).times(1)).onCompleted();
   }
 }
