@@ -182,3 +182,34 @@ docker run -p 6565:6565 clementpang/lionrock-test-server:latest
 Build (see above) or download the CLI from the release page and connect to it.
 
 ![CLI Demo](https://github.com/panghy/lionrock/blob/master/.github/images/cli-demo2.gif?raw=true "CLI Demo")
+
+# Streaming gRPC Connection Lifecycle
+
+Running FoundationDB transactions over a streaming gRPC connection presents unique challenges when compared to the
+native library version of the client. This is due to the fact that a single transaction is masqueraded as a
+bi-directional streaming RPC request between a client and a server. The question at hand is a) when should a client
+terminate the streaming connection to the server, b) when should the server terminate the streaming connection back to
+the client, and c) what to do to the many CompletableFutures that the client generates when the connection fails (I/O
+exceptions or otherwise).
+
+The API for FoundationDB allows the user to interact with Transaction objects even after the transaction commits
+(getVersionstamp() or getCommittedVersion() comes to mind). Watches also survive longer than even when the Transaction
+is explicitly closed() (implying that resources w.r.t. the Transaction should be reclaimed). All such properties mean
+that we cannot close the connection from the server to the client when we observe a commit. We can't also close the
+connection when close() is explicitly called on the client-side Transaction either.
+
+Currently, the design of connection lifecycling is such that the client takes the initiative on closing the connection
+(server timeouts not-withstanding), when all watches have been resolved and the client-side Transaction is closed(), we
+assume no additional operation is possible against the transaction context and at that point, we let the server know
+that the connection can be closed (gRPC multiplexes requests on a single connection so the cost of maintaining many open
+connections is not as significant as one would think).
+
+When a connection error occurs (or when the transaction itself errors out; we fail the gRPC request entirely when
+transaction commit fails), we need to make sure that all outstanding client-side CompletableFutures are marked as
+exceptionally completed. Individual asynchronous calls can error out on their own (which is sent as a stream message
+back to the client) but when the entire request is no longer feasible (and hence no stream messages would be received
+from that point forward), we need to make sure that there are no dangling futures.
+
+We also introduce an error when the server closes the connection (perhaps there was an intermediate proxy?) without
+satisfying all client-side outstanding CompletableFutures. We mark those with an internal error designation with the
+message "server_left".
