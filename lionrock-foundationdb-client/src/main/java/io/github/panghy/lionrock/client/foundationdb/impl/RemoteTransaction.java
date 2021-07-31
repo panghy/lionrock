@@ -33,6 +33,12 @@ import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
  */
 public class RemoteTransaction implements TransactionMixin {
 
+  /**
+   * Exception we set for the getVersionstamp() future when no write conflict ranges or mutations are present.
+   */
+  private static final FDBException NO_COMMIT_VERSION =
+      new FDBException("Transaction is read-only and therefore does not have a commit version", 2021);
+
   private static final Metadata.Key<String> FDB_ERROR_CODE_KEY =
       Metadata.Key.of("fdb_error_code", Metadata.ASCII_STRING_MARSHALLER);
   private static final Metadata.Key<String> FDB_ERROR_MESSAGE_KEY =
@@ -84,6 +90,11 @@ public class RemoteTransaction implements TransactionMixin {
   private final RemoteReadTransaction readTransaction = new RemoteReadTransaction();
   private final Collection<CompletableFuture<?>> futures = new ArrayList<>();
   private final CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+  private final CompletableFuture<byte[]> versionStampFuture = newCompletableFuture("getVersionstamp");
+  /**
+   * Whether this is a read-only transaction. Versionstamp fetches and commit version can be optimized.
+   */
+  private final AtomicBoolean readOnlyTx = new AtomicBoolean(false);
 
   private volatile Throwable remoteError;
 
@@ -235,6 +246,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void addWriteConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
+    readOnlyTx.set(false);
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().setAddConflictRange(
           AddConflictRangeRequest.newBuilder().
@@ -248,6 +260,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void set(byte[] key, byte[] value) {
     assertTransactionState();
+    readOnlyTx.set(false);
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetValue(
               SetValueRequest.newBuilder().
@@ -260,6 +273,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void clear(byte[] key) {
     assertTransactionState();
+    readOnlyTx.set(false);
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearKey(
               ClearKeyRequest.newBuilder().
@@ -272,6 +286,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void clear(byte[] beginKey, byte[] endKey) {
     assertTransactionState();
+    readOnlyTx.set(false);
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearRange(
               ClearKeyRangeRequest.newBuilder().
@@ -285,6 +300,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void mutate(MutationType optype, byte[] key, byte[] param) {
     assertTransactionState();
+    readOnlyTx.set(false);
     io.github.panghy.lionrock.proto.MutationType mutationType;
     switch (optype) {
       case AND:
@@ -347,6 +363,23 @@ public class RemoteTransaction implements TransactionMixin {
     if (commitStarted.getAndSet(true)) {
       throw new IllegalStateException("commit already started");
     }
+    if (readOnlyTx.get()) {
+      versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
+    } else {
+      // request Versionstamp.
+      long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
+        @Override
+        public void handleGetVersionstamp(GetVersionstampResponse resp) {
+          versionStampFuture.complete(resp.getVersionstamp().toByteArray());
+        }
+      }, versionStampFuture);
+      synchronized (requestSink) {
+        requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+            setGetVersionstamp(
+                GetVersionstampRequest.newBuilder().setSequenceId(curr).build()).
+            build());
+      }
+    }
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
               CommitTransactionRequest.newBuilder().build()).
@@ -357,6 +390,9 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public Long getCommittedVersion() {
+    if (readOnlyTx.get() && commitStarted.get()) {
+      return -1L;
+    }
     if (commitResponse.get() == null) {
       throw new IllegalStateException("not yet committed");
     }
@@ -365,21 +401,7 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public CompletableFuture<byte[]> getVersionstamp() {
-    assertTransactionState();
-    CompletableFuture<byte[]> toReturn = newCompletableFuture("getVersionstamp");
-    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
-      @Override
-      public void handleGetVersionstamp(GetVersionstampResponse resp) {
-        toReturn.complete(resp.getVersionstamp().toByteArray());
-      }
-    }, toReturn);
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-          setGetVersionstamp(
-              GetVersionstampRequest.newBuilder().setSequenceId(curr).build()).
-          build());
-    }
-    return toReturn;
+    return versionStampFuture;
   }
 
   private <T> NamedCompletableFuture<T> newCompletableFuture(String name) {
