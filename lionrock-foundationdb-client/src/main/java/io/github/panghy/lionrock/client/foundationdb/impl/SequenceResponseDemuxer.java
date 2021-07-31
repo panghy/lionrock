@@ -2,13 +2,12 @@ package io.github.panghy.lionrock.client.foundationdb.impl;
 
 import io.github.panghy.lionrock.proto.StreamingDatabaseResponse;
 
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.Executor;
-
-import static java.util.Optional.ofNullable;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Takes a {@link io.github.panghy.lionrock.proto.StreamingDatabaseResponse} and distributes the response to a number
@@ -18,16 +17,26 @@ import static java.util.Optional.ofNullable;
  */
 public class SequenceResponseDemuxer {
 
-  private final ConcurrentMap<Long, Set<StreamingDatabaseResponseVisitor>> sequenceResponseVisitors =
+  private final ConcurrentMap<Long, StreamingDatabaseResponseVisitor> sequenceResponseVisitors =
       new ConcurrentHashMap<>();
   private final Executor executor;
+  /**
+   * Allow us to debug sequence ids easier.
+   */
+  private final AtomicLong sequenceId = new AtomicLong((long) (Math.random() * Long.MAX_VALUE));
+  private final Set<Long> knownSequenceIds = new HashSet<>();
 
   public SequenceResponseDemuxer(Executor executor) {
     this.executor = executor;
   }
 
-  void addHandler(long sequenceId, StreamingDatabaseResponseVisitor visitor) {
-    sequenceResponseVisitors.computeIfAbsent(sequenceId, x -> new CopyOnWriteArraySet<>()).add(visitor);
+  long addHandler(StreamingDatabaseResponseVisitor visitor) {
+    long toReturn = sequenceId.incrementAndGet();
+    knownSequenceIds.add(toReturn);
+    if (sequenceResponseVisitors.putIfAbsent(toReturn, visitor) != null) {
+      throw new IllegalArgumentException("sequenceId: " + sequenceId + " is already registered");
+    }
+    return toReturn;
   }
 
   /**
@@ -41,52 +50,72 @@ public class SequenceResponseDemuxer {
    */
   void accept(StreamingDatabaseResponse resp) {
     if (resp.hasGetValue()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getGetValue().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetValue(resp.getGetValue())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetValue().getSequenceId());
+      executor.execute(() -> visitor.handleGetValue(resp.getGetValue()));
     } else if (resp.hasGetKey()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getGetKey().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetKey(resp.getGetKey())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetKey().getSequenceId());
+      executor.execute(() -> visitor.handleGetKey(resp.getGetKey()));
     } else if (resp.hasGetRange()) {
       // getRange can be called multiple times until done.
       if (resp.getGetRange().getDone()) {
-        ofNullable(sequenceResponseVisitors.remove(resp.getGetRange().getSequenceId())).orElse(Set.of()).
-            forEach(x -> executor.execute(() -> x.handleGetRange(resp.getGetRange())));
+        StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetRange().getSequenceId());
+        executor.execute(() -> visitor.handleGetRange(resp.getGetRange()));
       } else {
-        sequenceResponseVisitors.getOrDefault(resp.getGetRange().getSequenceId(), Set.of()).
-            forEach(x -> executor.execute(() -> x.handleGetRange(resp.getGetRange())));
+        StreamingDatabaseResponseVisitor visitor = getVistorOrThrow(resp.getGetRange().getSequenceId());
+        executor.execute(() -> visitor.handleGetRange(resp.getGetRange()));
       }
     } else if (resp.hasOperationFailure()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getOperationFailure().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleOperationFailure(resp.getOperationFailure())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getOperationFailure().getSequenceId());
+      executor.execute(() -> visitor.handleOperationFailure(resp.getOperationFailure()));
     } else if (resp.hasGetVersionstamp()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getGetVersionstamp().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetVersionstamp(resp.getGetVersionstamp())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetVersionstamp().getSequenceId());
+      executor.execute(() -> visitor.handleGetVersionstamp(resp.getGetVersionstamp()));
     } else if (resp.hasGetReadVersion()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getGetReadVersion().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetReadVersion(resp.getGetReadVersion())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetReadVersion().getSequenceId());
+      executor.execute(() -> visitor.handleGetReadVersion(resp.getGetReadVersion()));
     } else if (resp.hasWatchKey()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getWatchKey().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetWatchKey(resp.getWatchKey())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getWatchKey().getSequenceId());
+      executor.execute(() -> visitor.handleWatchKey(resp.getWatchKey()));
     } else if (resp.hasGetApproximateSize()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getGetApproximateSize().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetApproximateSize(resp.getGetApproximateSize())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetApproximateSize().getSequenceId());
+      executor.execute(() -> visitor.handleGetApproximateSize(resp.getGetApproximateSize()));
     } else if (resp.hasGetEstimatedRangeSize()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getGetEstimatedRangeSize().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetEstimatedRangeSize(resp.getGetEstimatedRangeSize())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetEstimatedRangeSize().getSequenceId());
+      executor.execute(() -> visitor.handleGetEstimatedRangeSize(resp.getGetEstimatedRangeSize()));
     } else if (resp.hasGetBoundaryKeys()) {
       // getBoundaryKeys can be called multiple times until done.
       if (resp.getGetBoundaryKeys().getDone()) {
-        ofNullable(sequenceResponseVisitors.remove(resp.getGetBoundaryKeys().getSequenceId())).orElse(Set.of()).
-            forEach(x -> executor.execute(() -> x.handleGetBoundaryKeys(resp.getGetBoundaryKeys())));
+        StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetBoundaryKeys().getSequenceId());
+        executor.execute(() -> visitor.handleGetBoundaryKeys(resp.getGetBoundaryKeys()));
       } else {
-        sequenceResponseVisitors.getOrDefault(resp.getGetBoundaryKeys().getSequenceId(), Set.of()).
-            forEach(x -> executor.execute(() -> x.handleGetBoundaryKeys(resp.getGetBoundaryKeys())));
+        StreamingDatabaseResponseVisitor visitor = getVistorOrThrow(resp.getGetBoundaryKeys().getSequenceId());
+        executor.execute(() -> visitor.handleGetBoundaryKeys(resp.getGetBoundaryKeys()));
       }
     } else if (resp.hasGetAddressesForKey()) {
-      ofNullable(sequenceResponseVisitors.remove(resp.getGetAddressesForKey().getSequenceId())).orElse(Set.of()).
-          forEach(x -> executor.execute(() -> x.handleGetAddressesForKey(resp.getGetAddressesForKey())));
+      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetAddressesForKey().getSequenceId());
+      executor.execute(() -> visitor.handleGetAddressesForKey(resp.getGetAddressesForKey()));
     } else {
       throw new IllegalArgumentException("Unsupported response: " + resp);
     }
+  }
+
+  private StreamingDatabaseResponseVisitor getVistorOrThrow(long sequenceId) {
+    if (!sequenceResponseVisitors.containsKey(sequenceId)) {
+      if (knownSequenceIds.contains(sequenceId)) {
+        throw new IllegalStateException("sequenceId: " + sequenceId + " already removed by prior callback");
+      }
+      throw new IllegalStateException("Unknown sequenceId: " + sequenceId);
+    }
+    return sequenceResponseVisitors.get(sequenceId);
+  }
+
+  private StreamingDatabaseResponseVisitor removeVistorOrThrow(long sequenceId) {
+    if (!sequenceResponseVisitors.containsKey(sequenceId)) {
+      if (knownSequenceIds.contains(sequenceId)) {
+        throw new IllegalStateException("sequenceId: " + sequenceId + " already removed by prior callback");
+      }
+      throw new IllegalStateException("Unknown sequenceId: " + sequenceId);
+    }
+    return sequenceResponseVisitors.remove(sequenceId);
   }
 }

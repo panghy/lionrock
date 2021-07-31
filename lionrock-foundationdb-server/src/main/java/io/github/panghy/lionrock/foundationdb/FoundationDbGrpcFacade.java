@@ -30,6 +30,7 @@ import org.springframework.stereotype.Component;
 import javax.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -472,13 +473,15 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       private final AtomicLong getEstimatedRangeSize = new AtomicLong();
       private final AtomicLong getBoundaryKeys = new AtomicLong();
       private final AtomicLong getAddressesForKey = new AtomicLong();
+
+      private final Set<Long> knownSequenceIds = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
       private volatile Transaction tx;
       /**
-       * {@link CompletableFuture}s chain that is created during the livetime of the transaction but may not resolve
-       * until <i>some</i> time later after the transaction is closed and destroyed. Examples include watches and the
-       * retrieval of the versionstamp after a commit.
+       * Long-living futures that might last beyond the open->commit() lifecycle of a transaction(e.g. getVersionStamp
+       * and watch).
        */
-      private volatile CompletableFuture<?> postCommitFutures = completedFuture(null);
+      private final List<CompletableFuture<?>> longLivingFutures = new ArrayList<>();
 
       @Override
       public void onNext(StreamingDatabaseRequest value) {
@@ -521,13 +524,13 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 tag("name", startRequest.getName());
           }
         } else if (value.hasCommitTransaction()) {
+          hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {
             if (overallSpan != null) {
               overallSpan.event("CommitTransactionRequest");
             }
             logger.debug("CommitTransactionRequest");
           }
-          hasActiveTransactionOrThrow();
           if (commitStarted.getAndSet(true)) {
             StatusRuntimeException toThrow = Status.INVALID_ARGUMENT.
                 withDescription("transaction already committed").
@@ -557,70 +560,14 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                       logger.debug(msg);
                     }
                   }
-                  // we only close the server-side connection when all post commit futures are resolved (whether success
-                  // or failures).
-                  postCommitFutures.whenComplete((ignored, t) -> {
-                    if (overallSpan != null) {
-                      if (rowsRead.get() > 0) {
-                        overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
-                      }
-                      if (rangeGetBatches.get() > 0) {
-                        overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
-                      }
-                      if (rowsWritten.get() > 0) {
-                        overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
-                      }
-                      if (clears.get() > 0) {
-                        overallSpan.tag("clears", String.valueOf(clears.get()));
-                      }
-                      if (getReadVersion.get() > 0) {
-                        overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
-                      }
-                      if (readConflictAdds.get() > 0) {
-                        overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
-                      }
-                      if (writeConflictAdds.get() > 0) {
-                        overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
-                      }
-                      if (rowsMutated.get() > 0) {
-                        overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
-                      }
-                      if (getVersionstamp.get() > 0) {
-                        overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
-                      }
-                      if (keysRead.get() > 0) {
-                        overallSpan.tag("keys_read", String.valueOf(keysRead.get()));
-                      }
-                      if (getApproximateSize.get() > 0) {
-                        overallSpan.tag("get_approximate_size", String.valueOf(getApproximateSize.get()));
-                      }
-                      if (getEstimatedRangeSize.get() > 0) {
-                        overallSpan.tag("get_estimated_range_size", String.valueOf(getEstimatedRangeSize.get()));
-                      }
-                      if (getBoundaryKeys.get() > 0) {
-                        overallSpan.tag("get_boundary_keys", String.valueOf(getBoundaryKeys.get()));
-                      }
-                      if (getAddressesForKey.get() > 0) {
-                        overallSpan.tag("get_addresses_for_key", String.valueOf(getAddressesForKey.get()));
-                      }
-                      // close the connection after all post commits are done.
-                      synchronized (this) {
-                        responseObserver.onCompleted();
-                      }
-                    }
-                  });
-                }
-                // close the transaction.
-                try {
-                  if (tx != null) {
-                    tx.close();
-                  }
-                } catch (RuntimeException ignored) {
                 }
                 opScope.close();
                 opSpan.end();
               });
         } else if (value.hasGetValue()) {
+          hasActiveTransactionOrThrow();
+          GetValueRequest req = value.getGetValue();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           if (logger.isDebugEnabled()) {
             String msg = "GetValueRequest on: " + printable(value.getGetValue().getKey().toByteArray());
             if (overallSpan != null) {
@@ -628,41 +575,29 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
             logger.debug(msg);
           }
-          hasActiveTransactionOrThrow();
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_value");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          GetValueRequest getValueRequest = value.getGetValue();
-          CompletableFuture<byte[]> getFuture = getValueRequest.getSnapshot() ?
-              tx.snapshot().get(getValueRequest.getKey().toByteArray()) :
-              tx.get(getValueRequest.getKey().toByteArray());
+          CompletableFuture<byte[]> getFuture = req.getSnapshot() ?
+              tx.snapshot().get(req.getKey().toByteArray()) :
+              tx.get(req.getKey().toByteArray());
           getFuture.whenComplete((val, throwable) -> {
             try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
               if (throwable != null) {
                 handleThrowable(opSpan, throwable,
-                    () -> "failed to get value for key: " + printable(getValueRequest.getKey().toByteArray()));
-                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                    setSequenceId(value.getGetValue().getSequenceId()).
-                    setMessage(throwable.getMessage());
-                if (throwable instanceof FDBException) {
-                  builder.setCode(((FDBException) throwable).getCode());
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setOperationFailure(builder.build()).
-                      build());
-                }
+                    () -> "failed to get value for key: " + printable(req.getKey().toByteArray()));
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetValueRequest on: " +
-                      printable(value.getGetValue().getKey().toByteArray()) + " is: " +
-                      printable(val);
+                      printable(req.getKey().toByteArray()) + " is: " +
+                      printable(val) + " seq_id: " + req.getSequenceId();
                   logger.debug(msg);
                   opSpan.event(msg);
                 }
                 rowsRead.incrementAndGet();
                 GetValueResponse.Builder build = GetValueResponse.newBuilder().
-                    setSequenceId(value.getGetValue().getSequenceId());
+                    setSequenceId(req.getSequenceId());
                 if (val != null) {
                   build.setValue(ByteString.copyFrom(val));
                 }
@@ -678,7 +613,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
           });
         } else if (value.hasGetKey()) {
-          io.github.panghy.lionrock.proto.KeySelector ks = value.getGetKey().getKeySelector();
+          hasActiveTransactionOrThrow();
+          GetKeyRequest req = value.getGetKey();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
+          io.github.panghy.lionrock.proto.KeySelector ks = req.getKeySelector();
           KeySelector keySelector = new KeySelector(ks.getKey().toByteArray(), ks.getOrEqual(), ks.getOffset());
           if (logger.isDebugEnabled()) {
             String msg = "GetKey for: " + keySelector;
@@ -687,12 +625,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               overallSpan.event(msg);
             }
           }
-          hasActiveTransactionOrThrow();
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_key");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          GetValueRequest getValueRequest = value.getGetValue();
-          CompletableFuture<byte[]> getFuture = getValueRequest.getSnapshot() ?
+          CompletableFuture<byte[]> getFuture = req.getSnapshot() ?
               tx.snapshot().getKey(keySelector) :
               tx.getKey(keySelector);
           getFuture.whenComplete((val, throwable) -> {
@@ -700,17 +636,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               if (throwable != null) {
                 handleThrowable(opSpan, throwable,
                     () -> "failed to get key: " + keySelector);
-                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                    setSequenceId(value.getGetKey().getSequenceId()).
-                    setMessage(throwable.getMessage());
-                if (throwable instanceof FDBException) {
-                  builder.setCode(((FDBException) throwable).getCode());
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setOperationFailure(builder.build()).
-                      build());
-                }
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetKey on: " +
@@ -720,7 +646,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 }
                 keysRead.incrementAndGet();
                 GetKeyResponse.Builder build = GetKeyResponse.newBuilder().
-                    setSequenceId(value.getGetKey().getSequenceId());
+                    setSequenceId(req.getSequenceId());
                 if (val != null) {
                   build.setKey(ByteString.copyFrom(val));
                 }
@@ -777,11 +703,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               value.getClearRange().getEnd().toByteArray());
         } else if (value.hasGetRange()) {
           hasActiveTransactionOrThrow();
+          GetRangeRequest req = value.getGetRange();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           rangeGets.incrementAndGet();
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_range").start();
           try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan.start())) {
-            GetRangeRequest req = value.getGetRange();
             KeySelector start;
             if (req.hasStartBytes()) {
               start = new KeySelector(req.getStartBytes().toByteArray(), false, 1);
@@ -890,7 +817,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 rangeGetBatches.incrementAndGet();
                 rowsRead.addAndGet(keyValues.size());
                 if (logger.isDebugEnabled()) {
-                  String msg = "Flushing: " + keyValues.size() + " rows, done: " + done;
+                  String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                      " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
+                      ", flushing: " + keyValues.size() + " rows, done: " + done + " seq_id: " + req.getSequenceId();
                   logger.debug(msg);
                   opSpan.event(msg);
                 }
@@ -948,6 +877,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
         } else if (value.hasGetReadVersion()) {
           hasActiveTransactionOrThrow();
+          GetReadVersionRequest req = value.getGetReadVersion();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           if (logger.isDebugEnabled()) {
             logger.debug("GetReadVersion");
             if (overallSpan != null) {
@@ -961,27 +892,21 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
               if (throwable != null) {
                 handleThrowable(opSpan, throwable, () -> "failed to get read version");
-                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                    setSequenceId(value.getGetReadVersion().getSequenceId()).
-                    setMessage(throwable.getMessage());
-                if (throwable instanceof FDBException) {
-                  builder.setCode(((FDBException) throwable).getCode());
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setOperationFailure(builder.build()).
-                      build());
-                }
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
               } else {
                 if (logger.isDebugEnabled()) {
-                  String msg = "GetReadVersion is: " + val;
+                  String msg = "GetReadVersion is: " + val + " seq_id: " + req.getSequenceId();
                   logger.debug(msg);
                   opSpan.event(msg);
                 }
-                getReadVersion.incrementAndGet();
+                this.getReadVersion.incrementAndGet();
                 synchronized (responseObserver) {
                   responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setGetReadVersion(GetReadVersionResponse.newBuilder().setReadVersion(val).build()).build());
+                      setGetReadVersion(GetReadVersionResponse.newBuilder().
+                          setReadVersion(val).
+                          setSequenceId(req.getSequenceId()).
+                          build()).
+                      build());
                 }
               }
             } finally {
@@ -1036,6 +961,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               value.getMutateValue().getParam().toByteArray());
         } else if (value.hasGetVersionstamp()) {
           hasActiveTransactionOrThrow();
+          GetVersionstampRequest req = value.getGetVersionstamp();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           if (logger.isDebugEnabled()) {
             String msg = "GetVersionstampRequest";
             logger.debug(msg);
@@ -1046,21 +973,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_versionstamp");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
           getVersionstamp.incrementAndGet();
-          chainPostCommitFuture(tx.getVersionstamp().whenComplete((vs, throwable) -> {
+          addLongLivingFuture(tx.getVersionstamp().whenComplete((vs, throwable) -> {
             try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
               if (throwable != null) {
                 handleThrowable(opSpan, throwable, () -> "failed to get versionstamp");
-                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                    setSequenceId(value.getGetVersionstamp().getSequenceId()).
-                    setMessage(throwable.getMessage());
-                if (throwable instanceof FDBException) {
-                  builder.setCode(((FDBException) throwable).getCode());
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setOperationFailure(builder.build()).
-                      build());
-                }
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetVersionstampRequest is: " + printable(vs);
@@ -1070,7 +987,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 synchronized (responseObserver) {
                   responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
                       setGetVersionstamp(GetVersionstampResponse.newBuilder().
-                          setSequenceId(value.getGetVersionstamp().getSequenceId()).
+                          setSequenceId(req.getSequenceId()).
                           setVersionstamp(ByteString.copyFrom(vs)).build()).
                       build());
                 }
@@ -1082,8 +999,10 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }));
         } else if (value.hasWatchKey()) {
           hasActiveTransactionOrThrow();
+          WatchKeyRequest req = value.getWatchKey();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           if (logger.isDebugEnabled()) {
-            String msg = "WatchKeyRequest for: " + printable(value.getWatchKey().getKey().toByteArray());
+            String msg = "WatchKeyRequest for: " + printable(req.getKey().toByteArray());
             logger.debug(msg);
             if (overallSpan != null) {
               overallSpan.event(msg);
@@ -1092,33 +1011,23 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.watch_key");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
           getVersionstamp.incrementAndGet();
-          chainPostCommitFuture(tx.watch(value.getWatchKey().getKey().toByteArray()).
+          addLongLivingFuture(tx.watch(req.getKey().toByteArray()).
               whenComplete((vs, throwable) -> {
                 try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
                   if (throwable != null) {
                     handleThrowable(opSpan, throwable, () -> "failed to watch key");
-                    OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                        setSequenceId(value.getWatchKey().getSequenceId()).
-                        setMessage(throwable.getMessage());
-                    if (throwable instanceof FDBException) {
-                      builder.setCode(((FDBException) throwable).getCode());
-                    }
-                    synchronized (responseObserver) {
-                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                          setOperationFailure(builder.build()).
-                          build());
-                    }
+                    sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
                   } else {
                     if (logger.isDebugEnabled()) {
                       String msg = "WatchKeyRequest Completed for: " +
-                          printable(value.getWatchKey().getKey().toByteArray());
+                          printable(req.getKey().toByteArray());
                       logger.debug(msg);
                       opSpan.event(msg);
                     }
                     synchronized (responseObserver) {
                       responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
                           setWatchKey(WatchKeyResponse.newBuilder().
-                              setSequenceId(value.getWatchKey().getSequenceId()).build()).
+                              setSequenceId(req.getSequenceId()).build()).
                           build());
                     }
                   }
@@ -1128,6 +1037,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 }
               }));
         } else if (value.hasGetApproximateSize()) {
+          hasActiveTransactionOrThrow();
+          GetApproximateSizeRequest req = value.getGetApproximateSize();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           if (logger.isDebugEnabled()) {
             String msg = "GetApproximateSizeRequest";
             if (overallSpan != null) {
@@ -1135,7 +1047,6 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
             logger.debug(msg);
           }
-          hasActiveTransactionOrThrow();
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_approximate_size");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
@@ -1145,17 +1056,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               if (throwable != null) {
                 handleThrowable(opSpan, throwable,
                     () -> "failed to get approximate size");
-                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                    setSequenceId(value.getGetApproximateSize().getSequenceId()).
-                    setMessage(throwable.getMessage());
-                if (throwable instanceof FDBException) {
-                  builder.setCode(((FDBException) throwable).getCode());
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setOperationFailure(builder.build()).
-                      build());
-                }
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetApproximateSize is: " + val;
@@ -1163,7 +1064,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   opSpan.event(msg);
                 }
                 GetApproximateSizeResponse.Builder build = GetApproximateSizeResponse.newBuilder().
-                    setSequenceId(value.getGetApproximateSize().getSequenceId());
+                    setSequenceId(req.getSequenceId());
                 if (val != null) {
                   build.setSize(val);
                 }
@@ -1179,8 +1080,11 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
           });
         } else if (value.hasGetEstimatedRangeSize()) {
-          byte[] startB = value.getGetEstimatedRangeSize().getStart().toByteArray();
-          byte[] endB = value.getGetEstimatedRangeSize().getEnd().toByteArray();
+          hasActiveTransactionOrThrow();
+          GetEstimatedRangeSizeRequest req = value.getGetEstimatedRangeSize();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
+          byte[] startB = req.getStart().toByteArray();
+          byte[] endB = req.getEnd().toByteArray();
           if (logger.isDebugEnabled()) {
             String msg = "GetEstimatedRangeSize for start: " + printable(startB) + " end: " + printable(endB);
             if (overallSpan != null) {
@@ -1188,27 +1092,16 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
             logger.debug(msg);
           }
-          hasActiveTransactionOrThrow();
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_estimated_range_size");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          getEstimatedRangeSize.incrementAndGet();
+          this.getEstimatedRangeSize.incrementAndGet();
           tx.getEstimatedRangeSizeBytes(startB, endB).whenComplete((val, throwable) -> {
             try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
               if (throwable != null) {
                 handleThrowable(opSpan, throwable,
                     () -> "failed to get estimated range size");
-                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                    setSequenceId(value.getGetEstimatedRangeSize().getSequenceId()).
-                    setMessage(throwable.getMessage());
-                if (throwable instanceof FDBException) {
-                  builder.setCode(((FDBException) throwable).getCode());
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setOperationFailure(builder.build()).
-                      build());
-                }
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetEstimatedRangeSize for start: " + printable(startB) + " end: " + printable(endB) +
@@ -1217,7 +1110,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   opSpan.event(msg);
                 }
                 GetEstimatedRangeSizeResponse.Builder build = GetEstimatedRangeSizeResponse.newBuilder().
-                    setSequenceId(value.getGetEstimatedRangeSize().getSequenceId());
+                    setSequenceId(req.getSequenceId());
                 if (val != null) {
                   build.setSize(val);
                 }
@@ -1234,11 +1127,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           });
         } else if (value.hasGetBoundaryKeys()) {
           hasActiveTransactionOrThrow();
+          GetBoundaryKeysRequest req = value.getGetBoundaryKeys();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           getBoundaryKeys.incrementAndGet();
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_boundary_keys").start();
           try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan.start())) {
-            GetBoundaryKeysRequest req = value.getGetBoundaryKeys();
             byte[] startB = req.getStart().toByteArray();
             byte[] endB = req.getEnd().toByteArray();
             if (logger.isDebugEnabled()) {
@@ -1319,7 +1213,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 rangeGetBatches.incrementAndGet();
                 rowsRead.addAndGet(boundaries.size());
                 if (logger.isDebugEnabled()) {
-                  String msg = "Flushing: " + boundaries.size() + " boundaries, done: " + done;
+                  String msg = "GetBoundaryKeysRequest from: " + printable(startB) + " to: " + printable(endB) +
+                      ", flushing: " + boundaries.size() + " boundaries, done: " + done;
                   logger.debug(msg);
                   opSpan.event(msg);
                 }
@@ -1338,6 +1233,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             iterator.onHasNext().whenComplete(hasNextConsumer);
           }
         } else if (value.hasGetAddressesForKey()) {
+          hasActiveTransactionOrThrow();
+          GetAddressesForKeyRequest req = value.getGetAddressesForKey();
+          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
           if (logger.isDebugEnabled()) {
             String msg = "GetAddressesForKey on: " + printable(value.getGetAddressesForKey().getKey().toByteArray());
             if (overallSpan != null) {
@@ -1345,29 +1243,17 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
             logger.debug(msg);
           }
-          hasActiveTransactionOrThrow();
           getAddressesForKey.incrementAndGet();
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_addresses_for_key");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          GetAddressesForKeyRequest req = value.getGetAddressesForKey();
           CompletableFuture<String[]> getFuture = LocalityUtil.getAddressesForKey(tx, req.getKey().toByteArray());
           getFuture.whenComplete((val, throwable) -> {
             try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
               if (throwable != null) {
                 handleThrowable(opSpan, throwable,
                     () -> "failed to get addresses for key: " + printable(req.getKey().toByteArray()));
-                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                    setSequenceId(req.getSequenceId()).
-                    setMessage(throwable.getMessage());
-                if (throwable instanceof FDBException) {
-                  builder.setCode(((FDBException) throwable).getCode());
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setOperationFailure(builder.build()).
-                      build());
-                }
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
               } else {
                 if (logger.isDebugEnabled()) {
                   String msg = "GetAddressesForKey on: " +
@@ -1396,14 +1282,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         }
       }
 
-      private void chainPostCommitFuture(CompletableFuture<?> postCommitFuture) {
-        // we must reference the existing future here (and not in the lambda).
-        CompletableFuture<?> existingFuture = this.postCommitFutures;
+      private void addLongLivingFuture(CompletableFuture<?> future) {
         synchronized (this) {
-          // eat the exception from this future and compose it with the existing chain.
-          this.postCommitFutures = postCommitFuture.
-              exceptionally(x -> null).
-              thenCompose(x -> existingFuture);
+          this.longLivingFutures.add(future);
         }
       }
 
@@ -1422,6 +1303,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       @Override
       public void onError(Throwable t) {
         logger.warn("onError from client in executeTransaction", t);
+        populateOverallSpanStats();
+        longLivingFutures.forEach(x -> x.cancel(false));
         if (tx != null) {
           tx.close();
         }
@@ -1429,11 +1312,86 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
       @Override
       public void onCompleted() {
+        logger.debug("client onCompleted()");
+        populateOverallSpanStats();
+        // if the client closes without committing, we'll close as well.
+        responseObserver.onCompleted();
+        longLivingFutures.forEach(x -> x.cancel(false));
         if (tx != null) {
           tx.close();
         }
       }
+
+      private void throwIfSequenceIdHasBeenSeen(long sequenceId) {
+        if (!knownSequenceIds.add(sequenceId)) {
+          onError(Status.INVALID_ARGUMENT.
+              withDescription("sequenceId: " + sequenceId + " has been seen before in this transaction").
+              asRuntimeException());
+        }
+      }
+
+      private void populateOverallSpanStats() {
+        if (overallSpan != null) {
+          if (rowsRead.get() > 0) {
+            overallSpan.tag("rows_read", String.valueOf(rowsRead.get()));
+          }
+          if (rangeGetBatches.get() > 0) {
+            overallSpan.tag("range_get.batches", String.valueOf(rangeGetBatches.get()));
+          }
+          if (rowsWritten.get() > 0) {
+            overallSpan.tag("rows_written", String.valueOf(rowsWritten.get()));
+          }
+          if (clears.get() > 0) {
+            overallSpan.tag("clears", String.valueOf(clears.get()));
+          }
+          if (getReadVersion.get() > 0) {
+            overallSpan.tag("read_version.gets", String.valueOf(getReadVersion.get()));
+          }
+          if (readConflictAdds.get() > 0) {
+            overallSpan.tag("add_read_conflicts", String.valueOf(readConflictAdds.get()));
+          }
+          if (writeConflictAdds.get() > 0) {
+            overallSpan.tag("add_write_conflicts", String.valueOf(writeConflictAdds.get()));
+          }
+          if (rowsMutated.get() > 0) {
+            overallSpan.tag("rows_mutated", String.valueOf(rowsMutated.get()));
+          }
+          if (getVersionstamp.get() > 0) {
+            overallSpan.tag("get_versionstamp", String.valueOf(getVersionstamp.get()));
+          }
+          if (keysRead.get() > 0) {
+            overallSpan.tag("keys_read", String.valueOf(keysRead.get()));
+          }
+          if (getApproximateSize.get() > 0) {
+            overallSpan.tag("get_approximate_size", String.valueOf(getApproximateSize.get()));
+          }
+          if (getEstimatedRangeSize.get() > 0) {
+            overallSpan.tag("get_estimated_range_size", String.valueOf(getEstimatedRangeSize.get()));
+          }
+          if (getBoundaryKeys.get() > 0) {
+            overallSpan.tag("get_boundary_keys", String.valueOf(getBoundaryKeys.get()));
+          }
+          if (getAddressesForKey.get() > 0) {
+            overallSpan.tag("get_addresses_for_key", String.valueOf(getAddressesForKey.get()));
+          }
+        }
+      }
     };
+  }
+
+  private void sendErrorToRemote(Throwable throwable, long sequenceId,
+                                 StreamObserver<StreamingDatabaseResponse> responseObserver) {
+    OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+        setSequenceId(sequenceId).
+        setMessage(throwable.getMessage());
+    if (throwable instanceof FDBException) {
+      builder.setCode(((FDBException) throwable).getCode());
+    }
+    synchronized (responseObserver) {
+      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+          setOperationFailure(builder.build()).
+          build());
+    }
   }
 
   private com.apple.foundationdb.MutationType getMutationType(MutationType mutationType) {
