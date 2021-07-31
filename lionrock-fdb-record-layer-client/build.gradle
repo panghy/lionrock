@@ -1,0 +1,117 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'jacoco'
+    id 'signing'
+    id 'org.springframework.boot' version '2.5.3'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id "com.google.protobuf" version "0.8.17"
+}
+
+ext {
+    set('springCloudVersion', "2020.0.3")
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name 'sonatype-snapshot'
+        url 'https://s01.oss.sonatype.org/content/repositories/snapshots'
+    }
+}
+
+bootJar {
+    enabled = false
+}
+
+dependencies {
+    // replace after refactoring https://github.com/FoundationDB/fdb-record-layer/pull/1344.
+    implementation 'io.github.panghy.foundationdb:fdb-record-layer-core-pb3:999.3.0-SNAPSHOT'
+    implementation 'io.grpc:grpc-stub:1.39.0'
+    implementation project(':lionrock-foundationdb-client')
+
+    testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
+    testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
+
+    testImplementation 'io.grpc:grpc-netty:1.39.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
+    testRuntimeOnly 'io.github.lognet:grpc-spring-boot-starter:4.5.5'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+task sourceJar(type: Jar) {
+    classifier 'sources'
+    from sourceSets.main.allJava
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            pom {
+                name = "lionrock-foundationdb-client"
+                description = "FoundationDB gRPC Record Layer Library"
+                url = "https://github.com/panghy/lionrock"
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "panghy"
+                        name = "Clement Pang"
+                    }
+                }
+                scm {
+                    url = "https://github.com/panghy/lionrock"
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "OSSRH"
+            if(project.version.endsWith('-SNAPSHOT')) {
+                url "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            } else {
+                url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            }
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
+            }
+        }
+    }
+}
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
+}
+
+signing {
+    useGpgCmd()
+    sign publishing.publications.mavenJava
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.17.3'
+    }
+}

@@ -21,7 +21,7 @@ public interface StreamingDatabaseResponseVisitor {
 
   void handleGetReadVersion(GetReadVersionResponse resp);
 
-  void handleGetWatchKey(WatchKeyResponse resp);
+  void handleWatchKey(WatchKeyResponse resp);
 
   void handleGetApproximateSize(GetApproximateSizeResponse resp);
 

@@ -6,7 +6,6 @@ import com.apple.foundationdb.MutationType;
 import com.apple.foundationdb.StreamingMode;
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
-import com.apple.foundationdb.tuple.ByteArrayUtil;
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.client.foundationdb.impl.collections.GrpcAsyncIterable;
 import io.github.panghy.lionrock.client.foundationdb.mixins.ReadTransactionMixin;
@@ -20,11 +19,12 @@ import io.grpc.stub.StreamObserver;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
 
 /**
  * A {@link Transaction} that's backed by a gRPC streaming call.
@@ -47,7 +47,6 @@ public class RemoteTransaction implements TransactionMixin {
   private final AtomicBoolean completed = new AtomicBoolean(false);
   private final AtomicReference<CommitTransactionResponse> commitResponse = new AtomicReference<>();
   private final SequenceResponseDemuxer demuxer;
-  private final AtomicLong sequenceId = new AtomicLong();
   private final RemoteTransactionContext remoteTransactionContext;
   /**
    * Instance of {@link TransactionOptions} for this transaction context.
@@ -83,8 +82,8 @@ public class RemoteTransaction implements TransactionMixin {
    * Instance of {@link ReadTransaction} that allows for snapshot reads.
    */
   private final RemoteReadTransaction readTransaction = new RemoteReadTransaction();
-  private final List<CompletableFuture<?>> futures = new ArrayList<>();
-  private final CompletableFuture<Void> commitFuture = newCompletableFuture();
+  private final Collection<CompletableFuture<?>> futures = new ArrayList<>();
+  private final CompletableFuture<Void> commitFuture = new CompletableFuture<>();
 
   private volatile Throwable remoteError;
 
@@ -103,7 +102,7 @@ public class RemoteTransaction implements TransactionMixin {
           if (value.hasCommitTransaction()) {
             commitResponse.set(value.getCommitTransaction());
             completed.set(true);
-            commitFuture.completeAsync(() -> null, getExecutor());
+            commitFuture.complete(null);
           } else {
             demuxer.accept(value);
           }
@@ -111,15 +110,25 @@ public class RemoteTransaction implements TransactionMixin {
 
         @Override
         public void onError(Throwable t) {
+          // if the server error-ed out, fail all outstanding future.
           Throwable unwrapped = unwrapFdbException(t);
           synchronized (futures) {
             futures.forEach(x -> x.completeExceptionally(unwrapped));
           }
+          commitFuture.completeExceptionally(unwrapped);
           remoteError = unwrapped;
         }
 
         @Override
         public void onCompleted() {
+          synchronized (futures) {
+            // internal error if any future is still outstanding but the server left.
+            futures.forEach(x -> {
+              if (!x.isDone()) {
+                x.completeExceptionally(new FDBException("server_left, dangling future: " + x, 4100));
+              }
+            });
+          }
           completed.set(true);
         }
       });
@@ -357,11 +366,11 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<byte[]> getVersionstamp() {
     assertTransactionState();
-    CompletableFuture<byte[]> toReturn = newCompletableFuture();
+    CompletableFuture<byte[]> toReturn = newCompletableFuture("getVersionstamp");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetVersionstamp(GetVersionstampResponse resp) {
-        toReturn.completeAsync(() -> resp.getVersionstamp().toByteArray(), getExecutor());
+        toReturn.complete(resp.getVersionstamp().toByteArray());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -373,8 +382,8 @@ public class RemoteTransaction implements TransactionMixin {
     return toReturn;
   }
 
-  private <T> CompletableFuture<T> newCompletableFuture() {
-    CompletableFuture<T> toReturn = new CompletableFuture<>();
+  private <T> NamedCompletableFuture<T> newCompletableFuture(String name) {
+    NamedCompletableFuture<T> toReturn = new NamedCompletableFuture<>(name);
     synchronized (futures) {
       futures.add(toReturn);
     }
@@ -384,12 +393,12 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Long> getApproximateSize() {
     assertTransactionState();
-    CompletableFuture<Long> toReturn = newCompletableFuture();
+    CompletableFuture<Long> toReturn = newCompletableFuture("getApproximateSize");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
       @Override
       public void handleGetApproximateSize(GetApproximateSizeResponse resp) {
-        toReturn.completeAsync(resp::getSize, getExecutor());
+        toReturn.complete(resp.getSize());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -424,7 +433,7 @@ public class RemoteTransaction implements TransactionMixin {
           new FDBException("Operation aborted because the transaction timed out", 1031));
     }
     // completeOnTimeout won't work since we only want to create the tranaction when we do time out.
-    return this.<Transaction>newCompletableFuture().
+    return this.<Transaction>newCompletableFuture("onError").
         orTimeout(delayMs, TimeUnit.MILLISECONDS).
         exceptionally(x ->
             new RemoteTransaction(remoteTransactionContext,
@@ -465,12 +474,12 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Void> watch(byte[] key) throws FDBException {
     assertTransactionState();
-    CompletableFuture<Void> toReturn = newCompletableFuture();
+    CompletableFuture<Void> toReturn = newCompletableFuture("watch");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
       @Override
-      public void handleGetWatchKey(WatchKeyResponse resp) {
-        toReturn.completeAsync(() -> null, getExecutor());
+      public void handleWatchKey(WatchKeyResponse resp) {
+        toReturn.complete(null);
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -490,6 +499,10 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void close() {
+    completed.set(true);
+    // wait until all outstanding futures complete before closing the connection to the server.
+    CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).
+        whenComplete((unused, throwable) -> requestSink.onCompleted());
   }
 
   @Override
@@ -505,16 +518,17 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Long> getReadVersion() {
     assertTransactionState();
-    CompletableFuture<Long> toReturn = newCompletableFuture();
+    CompletableFuture<Long> toReturn = newCompletableFuture("getReadVersion");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetReadVersion(GetReadVersionResponse resp) {
-        toReturn.completeAsync(resp::getReadVersion, getExecutor());
+        toReturn.complete(resp.getReadVersion());
       }
     }, toReturn);
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-          setGetReadVersion(GetReadVersionRequest.newBuilder().setSequenceId(curr).
+          setGetReadVersion(GetReadVersionRequest.newBuilder().
+              setSequenceId(curr).
               build()).
           build());
     }
@@ -534,16 +548,17 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<byte[]> get(byte[] key) {
     assertTransactionState();
-    CompletableFuture<byte[]> toReturn = newCompletableFuture();
+    CompletableFuture<byte[]> toReturn = newCompletableFuture("get: " + printable(key));
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetValue(GetValueResponse resp) {
-        toReturn.completeAsync(() -> resp.hasValue() ? resp.getValue().toByteArray() : null, getExecutor());
+        toReturn.complete(resp.hasValue() ? resp.getValue().toByteArray() : null);
       }
     }, toReturn);
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-          setGetValue(GetValueRequest.newBuilder().setKey(ByteString.copyFrom(key)).
+          setGetValue(GetValueRequest.newBuilder().
+              setKey(ByteString.copyFrom(key)).
               setSequenceId(curr).
               build()).
           build());
@@ -554,11 +569,11 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<byte[]> getKey(KeySelector selector) {
     assertTransactionState();
-    CompletableFuture<byte[]> toReturn = newCompletableFuture();
+    CompletableFuture<byte[]> toReturn = newCompletableFuture("getKey");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetKey(GetKeyResponse resp) {
-        toReturn.completeAsync(() -> resp.hasKey() ? resp.getKey().toByteArray() : null, getExecutor());
+        toReturn.complete(resp.hasKey() ? resp.getKey().toByteArray() : null);
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -599,8 +614,7 @@ public class RemoteTransaction implements TransactionMixin {
         // fetch issuer
         (responseConsumer, failureConsumer) -> {
           assertTransactionState();
-          long curr = sequenceId.getAndIncrement();
-          demuxer.addHandler(curr, new StreamingDatabaseResponseVisitorStub() {
+          long curr = demuxer.addHandler(new StreamingDatabaseResponseVisitorStub() {
             @Override
             public void handleGetRange(GetRangeResponse resp) {
               responseConsumer.accept(resp);
@@ -630,11 +644,11 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Long> getEstimatedRangeSizeBytes(byte[] begin, byte[] end) {
     assertTransactionState();
-    CompletableFuture<Long> toReturn = newCompletableFuture();
+    CompletableFuture<Long> toReturn = newCompletableFuture("getEstimatedRangeSizeBytes");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp) {
-        toReturn.completeAsync(resp::getSize, getExecutor());
+        toReturn.complete(resp.getSize());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -685,8 +699,7 @@ public class RemoteTransaction implements TransactionMixin {
         // fetch issuer.
         (responseConsumer, failureConsumer) -> {
           assertTransactionState();
-          long curr = sequenceId.getAndIncrement();
-          demuxer.addHandler(curr, new StreamingDatabaseResponseVisitorStub() {
+          long curr = demuxer.addHandler(new StreamingDatabaseResponseVisitorStub() {
             @Override
             public void handleGetBoundaryKeys(GetBoundaryKeysResponse resp) {
               responseConsumer.accept(resp);
@@ -718,12 +731,12 @@ public class RemoteTransaction implements TransactionMixin {
    */
   public CompletableFuture<String[]> getAddressesForKey(byte[] key) {
     assertTransactionState();
-    CompletableFuture<String[]> toReturn = newCompletableFuture();
+    CompletableFuture<String[]> toReturn = newCompletableFuture("getAddressesForKey");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
       @Override
       public void handleGetAddressesForKey(GetAddressesForKeyResponse resp) {
-        toReturn.completeAsync(() -> resp.getAddressesList().toArray(String[]::new), getExecutor());
+        toReturn.complete(resp.getAddressesList().toArray(String[]::new));
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -738,8 +751,7 @@ public class RemoteTransaction implements TransactionMixin {
   }
 
   private long registerHandler(StreamingDatabaseResponseVisitor visitor, CompletableFuture<?> future) {
-    long curr = this.sequenceId.getAndIncrement();
-    demuxer.addHandler(curr, new StreamingDatabaseResponseVisitor() {
+    long curr = demuxer.addHandler(new StreamingDatabaseResponseVisitor() {
 
       @Override
       public void handleGetValue(GetValueResponse resp) {
@@ -772,8 +784,8 @@ public class RemoteTransaction implements TransactionMixin {
       }
 
       @Override
-      public void handleGetWatchKey(WatchKeyResponse resp) {
-        visitor.handleGetWatchKey(resp);
+      public void handleWatchKey(WatchKeyResponse resp) {
+        visitor.handleWatchKey(resp);
       }
 
       @Override
@@ -796,6 +808,9 @@ public class RemoteTransaction implements TransactionMixin {
         future.completeExceptionally(new FDBException(resp.getMessage(), (int) resp.getCode()));
       }
     });
+    if (future instanceof NamedCompletableFuture) {
+      ((NamedCompletableFuture<?>) future).addBaggage("seq_id", String.valueOf(curr));
+    }
     return curr;
   }
 
@@ -831,7 +846,7 @@ public class RemoteTransaction implements TransactionMixin {
     // keySelector orEquals() is package private. while that gets fixed, we'll have to do something ugly.
     String kSStr = keySelector.toString();
     byte[] key = keySelector.getKey();
-    String printableKey = ByteArrayUtil.printable(key);
+    String printableKey = printable(key);
     String orEqualsTrue = String.format("(%s, %s, %d)", printableKey, true, keySelector.getOffset());
     String orEqualsFalse = String.format("(%s, %s, %d)", printableKey, false, keySelector.getOffset());
     if (kSStr.equals(orEqualsTrue)) {

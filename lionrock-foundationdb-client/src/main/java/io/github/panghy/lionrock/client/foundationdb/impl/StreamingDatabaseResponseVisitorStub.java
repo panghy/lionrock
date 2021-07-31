@@ -27,7 +27,7 @@ public interface StreamingDatabaseResponseVisitorStub extends StreamingDatabaseR
   default void handleGetReadVersion(GetReadVersionResponse resp) {
   }
 
-  default void handleGetWatchKey(WatchKeyResponse resp) {
+  default void handleWatchKey(WatchKeyResponse resp) {
   }
 
   default void handleGetApproximateSize(GetApproximateSizeResponse resp) {
