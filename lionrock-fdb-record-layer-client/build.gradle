@@ -25,7 +25,7 @@ bootJar {
 }
 
 dependencies {
-    // replace after refactoring.
+    // replace after refactoring https://github.com/FoundationDB/fdb-record-layer/pull/1344.
     implementation 'io.github.panghy.foundationdb:fdb-record-layer-core-pb3:999.3.0-SNAPSHOT'
     implementation 'io.grpc:grpc-stub:1.39.0'
     implementation project(':lionrock-foundationdb-client')
@@ -33,9 +33,6 @@ dependencies {
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
 
-    // replace after refactoring.
-    testImplementation 'io.github.panghy.foundationdb:fdb-record-layer-core-pb3:999.3.0-SNAPSHOT'
-    testImplementation 'io.grpc:grpc-stub:1.39.0'
     testImplementation 'io.grpc:grpc-netty:1.39.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
