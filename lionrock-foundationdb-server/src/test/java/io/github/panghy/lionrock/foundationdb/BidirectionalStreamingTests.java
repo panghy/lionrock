@@ -7,7 +7,6 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -690,37 +689,6 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamObserver<StreamingDatabaseRequest> serverStub;
-    // make sure we have a metadataVersion key.
-    serverStub = stub.executeTransaction(streamObs);
-    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
-        setStartTransaction(StartTransactionRequest.newBuilder().
-            setName("testGetReadVersion").
-            setClientIdentifier("unit test").
-            setDatabaseName("fdb").
-            build()).
-        build());
-    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetReadVersion(GetReadVersionRequest.newBuilder().
-            setSequenceId(12345).
-            build()).
-        build());
-    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
-        setMutateValue(MutateValueRequest.newBuilder().
-            setType(MutationType.SET_VERSIONSTAMPED_VALUE).
-            setKey(ByteString.copyFrom(FoundationDbGrpcFacade.METADATA_VERSION_KEY)).
-            setParam(ByteString.copyFrom(new byte[14])).
-            build()).
-        build());
-    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
-        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
-        build());
-    verify(streamObs, timeout(5000).times(2)).onNext(streamingDatabaseResponseCapture.capture());
-    serverStub.onCompleted();
-    verify(streamObs, never()).onError(any());
-
-    // reset the capture.
-    streamingDatabaseResponseCapture = ArgumentCaptor.forClass(StreamingDatabaseResponse.class);
-    streamObs = mock(StreamObserver.class);
     serverStub = stub.executeTransaction(streamObs);
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().
         setStartTransaction(StartTransactionRequest.newBuilder().
@@ -737,9 +705,8 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     serverStub.onCompleted();
 
     StreamingDatabaseResponse capture = streamingDatabaseResponseCapture.getValue();
-    assertTrue(capture.hasGetReadVersion(), capture::toString);
+    assertTrue(capture.hasGetReadVersion());
     assertEquals(12345, capture.getGetReadVersion().getSequenceId());
-    assertTrue(capture.getGetReadVersion().hasMetadataVersion());
     assertTrue(capture.getGetReadVersion().getReadVersion() > 0);
   }
 

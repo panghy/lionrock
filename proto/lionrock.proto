@@ -248,12 +248,7 @@ message GetReadVersionResponse {
   // In streaming use-cases, the sequence_id is used by the client to identify a
   // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
-  // The current read version.
   int64 read_version = 2;
-  // This is a "free" read provided by the server, send this back when the client gets a read version. Clients will have
-  // to cache the value of \xff/metaVersion and reset it when SetReadVersion is called to actually return
-  // this value properly.
-  optional bytes metadata_version = 3;
 }
 
 // A request to set the read version to use for the transaction.
