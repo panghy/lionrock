@@ -700,6 +700,11 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
             build()).
         build());
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setGetReadVersion(GetReadVersionRequest.newBuilder().
+            setSequenceId(12345).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
         setMutateValue(MutateValueRequest.newBuilder().
             setType(MutationType.SET_VERSIONSTAMPED_VALUE).
             setKey(ByteString.copyFrom(FoundationDbGrpcFacade.METADATA_VERSION_KEY)).
@@ -709,7 +714,7 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
-    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(2)).onNext(streamingDatabaseResponseCapture.capture());
     serverStub.onCompleted();
     verify(streamObs, never()).onError(any());
 
