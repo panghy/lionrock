@@ -1,6 +1,5 @@
 package io.github.panghy.lionrock.client.foundationdb.impl;
 
-import com.google.common.util.concurrent.MoreExecutors;
 import io.github.panghy.lionrock.proto.GetRangeResponse;
 import io.github.panghy.lionrock.proto.GetValueResponse;
 import io.github.panghy.lionrock.proto.StreamingDatabaseResponse;
@@ -12,7 +11,7 @@ class SequenceResponseDemuxerTest {
 
   @Test
   void accept_getValue() {
-    SequenceResponseDemuxer demuxer = new SequenceResponseDemuxer(MoreExecutors.directExecutor());
+    SequenceResponseDemuxer demuxer = new SequenceResponseDemuxer();
 
     StreamingDatabaseResponseVisitor visitor = mock(StreamingDatabaseResponseVisitor.class);
     long seqId = demuxer.addHandler(visitor);
@@ -47,7 +46,7 @@ class SequenceResponseDemuxerTest {
 
   @Test
   void accept_getRange() {
-    SequenceResponseDemuxer demuxer = new SequenceResponseDemuxer(MoreExecutors.directExecutor());
+    SequenceResponseDemuxer demuxer = new SequenceResponseDemuxer();
 
     StreamingDatabaseResponseVisitor visitor = mock(StreamingDatabaseResponseVisitor.class);
     long seqId = demuxer.addHandler(visitor);

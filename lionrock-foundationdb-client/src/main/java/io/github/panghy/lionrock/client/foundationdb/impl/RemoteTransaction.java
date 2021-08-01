@@ -125,12 +125,13 @@ public class RemoteTransaction implements TransactionMixin {
         if (value.hasCommitTransaction()) {
           commitResponse.set(value.getCommitTransaction());
           if (value.getCommitTransaction().hasVersionstamp()) {
-            versionStampFuture.complete(value.getCommitTransaction().getVersionstamp().toByteArray());
+            versionStampFuture.completeAsync(() -> value.getCommitTransaction().getVersionstamp().toByteArray(),
+                getExecutor());
           } else if (!versionStampFuture.isDone()) {
             versionStampFuture.completeExceptionally(new FDBException("no_versionstamp_from_server", 4100));
           }
           close();
-          commitFuture.complete(null);
+          commitFuture.completeAsync(() -> null, getExecutor());
         } else {
           demuxer.accept(value);
         }
@@ -185,7 +186,7 @@ public class RemoteTransaction implements TransactionMixin {
       }
     }
     this.remoteTransactionContext = remoteTransactionContext;
-    this.demuxer = new SequenceResponseDemuxer(remoteTransactionContext.getExecutor());
+    this.demuxer = new SequenceResponseDemuxer();
   }
 
   private class RemoteReadTransaction implements ReadTransactionMixin {
@@ -395,7 +396,7 @@ public class RemoteTransaction implements TransactionMixin {
     if (readOnlyTx.get()) {
       versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
       close();
-      commitFuture.complete(null);
+      commitFuture.completeAsync(() -> null, getExecutor());
     } else {
       synchronized (requestSink) {
         requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
@@ -438,7 +439,7 @@ public class RemoteTransaction implements TransactionMixin {
 
       @Override
       public void handleGetApproximateSize(GetApproximateSizeResponse resp) {
-        toReturn.complete(resp.getSize());
+        toReturn.completeAsync(resp::getSize, getExecutor());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -520,7 +521,7 @@ public class RemoteTransaction implements TransactionMixin {
 
       @Override
       public void handleWatchKey(WatchKeyResponse resp) {
-        toReturn.complete(null);
+        toReturn.completeAsync(() -> null, getExecutor());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -564,7 +565,7 @@ public class RemoteTransaction implements TransactionMixin {
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetReadVersion(GetReadVersionResponse resp) {
-        toReturn.complete(resp.getReadVersion());
+        toReturn.completeAsync(resp::getReadVersion, getExecutor());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -598,7 +599,7 @@ public class RemoteTransaction implements TransactionMixin {
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetValue(GetValueResponse resp) {
-        toReturn.complete(resp.hasValue() ? resp.getValue().toByteArray() : null);
+        toReturn.completeAsync(() -> resp.hasValue() ? resp.getValue().toByteArray() : null, getExecutor());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -624,7 +625,7 @@ public class RemoteTransaction implements TransactionMixin {
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetKey(GetKeyResponse resp) {
-        toReturn.complete(resp.hasKey() ? resp.getKey().toByteArray() : null);
+        toReturn.completeAsync(() -> resp.hasKey() ? resp.getKey().toByteArray() : null, getExecutor());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -706,7 +707,7 @@ public class RemoteTransaction implements TransactionMixin {
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
       public void handleGetEstimatedRangeSize(GetEstimatedRangeSizeResponse resp) {
-        toReturn.complete(resp.getSize());
+        toReturn.completeAsync(resp::getSize, getExecutor());
       }
     }, toReturn);
     synchronized (requestSink) {
@@ -794,7 +795,7 @@ public class RemoteTransaction implements TransactionMixin {
 
       @Override
       public void handleGetAddressesForKey(GetAddressesForKeyResponse resp) {
-        toReturn.complete(resp.getAddressesList().toArray(String[]::new));
+        toReturn.completeAsync(() -> resp.getAddressesList().toArray(String[]::new), getExecutor());
       }
     }, toReturn);
     synchronized (requestSink) {

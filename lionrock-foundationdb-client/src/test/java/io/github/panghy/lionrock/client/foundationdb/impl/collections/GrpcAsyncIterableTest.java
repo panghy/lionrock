@@ -15,7 +15,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -35,12 +34,11 @@ class GrpcAsyncIterableTest {
     GrpcAsyncIterator.RemovalCallback<KeyValue> removalCallback = mock(GrpcAsyncIterator.RemovalCallback.class);
 
     GrpcAsyncIterable.FetchIssuer<GetRangeResponse> fetchIssuer = mock(GrpcAsyncIterable.FetchIssuer.class);
-    Executor executor = mock(Executor.class);
 
     GrpcAsyncIterable<KeyValue, GetRangeResponse> iterable = new GrpcAsyncIterable<>(
         removalCallback, resp -> resp.getKeyValuesList().stream().map(x ->
         new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
-        GetRangeResponse::getDone, fetchIssuer, executor);
+        GetRangeResponse::getDone, fetchIssuer, MoreExecutors.directExecutor());
     AsyncIterator<KeyValue> iterator = iterable.iterator();
 
     verify(fetchIssuer, times(1)).issue(respCaptor.capture(), failureCaptor.capture());

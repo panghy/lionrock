@@ -5,11 +5,11 @@ import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.StreamingMode;
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
-import com.apple.foundationdb.async.AsyncIterator;
 import com.apple.foundationdb.async.AsyncUtil;
 import com.apple.foundationdb.async.CloseableAsyncIterator;
 import com.google.common.base.Joiner;
 import com.google.common.base.Throwables;
+import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.MutationType;
 import io.github.panghy.lionrock.proto.*;
@@ -52,6 +52,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
   @Autowired
   Configuration config;
+  @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
   @Autowired
   Tracer tracer;
 
@@ -764,13 +765,75 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             AsyncIterable<KeyValue> range = req.getSnapshot() ?
                 tx.snapshot().getRange(start, end, req.getLimit(), req.getReverse(), mode) :
                 tx.getRange(start, end, req.getLimit(), req.getReverse(), mode);
-            AsyncIterator<KeyValue> iterator = range.iterator();
+            // asList() method.
+            Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+            range.asList().whenComplete((results, throwable) -> {
+              try (Tracer.SpanInScope ignored1 = tracer.withSpan(opSpan)) {
+                if (throwable != null) {
+                  handleThrowable(opSpan, throwable,
+                      () -> "failed to get range for start: " + start + " end: " + end +
+                          " reverse: " + req.getReverse() + " limit: " + req.getLimit() +
+                          " mode: " + req.getStreamingMode());
+                  sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
+                } else {
+                  opSpan.tag("rows_read", String.valueOf(results.size()));
+                  opSpan.tag("batches", String.valueOf(1));
+                  if (logger.isDebugEnabled()) {
+                    String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                        " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
+                        ", flushing: " + results.size() + " rows, seq_id: " + req.getSequenceId();
+                    logger.debug(msg);
+                    opSpan.event(msg);
+                  }
+                  if (results.isEmpty()) {
+                    synchronized (responseObserver) {
+                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setGetRange(GetRangeResponse.newBuilder().
+                              setDone(true).
+                              setSequenceId(req.getSequenceId()).build()).
+                          build());
+                    }
+                  }
+                  List<List<KeyValue>> parts = Lists.partition(results, 25);
+                  for (int i = 0; i < parts.size(); i++) {
+                    List<KeyValue> keyValues = parts.get(i);
+                    boolean done = (i == parts.size() - 1);
+                    if (logger.isDebugEnabled()) {
+                      String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                          " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
+                          ", flushing: " + keyValues.size() + " rows, done: " + done +
+                          ", seq_id: " + req.getSequenceId();
+                      logger.debug(msg);
+                      opSpan.event(msg);
+                    }
+                    GetRangeResponse.Builder builder = GetRangeResponse.newBuilder().
+                        setDone(done).
+                        setSequenceId(req.getSequenceId());
+                    for (KeyValue result : keyValues) {
+                      builder.addKeyValuesBuilder().
+                          setKey(ByteString.copyFrom(result.getKey())).
+                          setValue(ByteString.copyFrom(result.getValue()));
+                    }
+                    synchronized (responseObserver) {
+                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                          setGetRange(builder.build()).
+                          build());
+                    }
+                  }
+                }
+              } finally {
+                opScope.close();
+                opSpan.end();
+              }
+            });
+            // iterator method.
+            /*AsyncIterator<KeyValue> iterator = range.iterator();
             // consumer that collects key values and returns them to the user.
             AtomicLong rows = new AtomicLong();
             AtomicLong batches = new AtomicLong();
             BiConsumer<Boolean, Throwable> hasNextConsumer = new BiConsumer<>() {
 
-              private final List<io.github.panghy.lionrock.proto.KeyValue> keyValues = new ArrayList<>();
+              private final GetRangeResponse.Builder responseBuilder = GetRangeResponse.newBuilder();
 
               @Override
               public void accept(Boolean hasNext, Throwable throwable) {
@@ -809,12 +872,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                       }
                       KeyValue next = iterator.next();
                       rows.incrementAndGet();
-                      synchronized (keyValues) {
-                        keyValues.add(io.github.panghy.lionrock.proto.KeyValue.newBuilder().
-                            setKey(ByteString.copyFrom(next.getKey())).
-                            setValue(ByteString.copyFrom(next.getValue())).
-                            build());
-                      }
+                      responseBuilder.addKeyValuesBuilder().
+                          setKey(ByteString.copyFrom(next.getKey())).
+                          setValue(ByteString.copyFrom(next.getValue()));
                     }
                   }
                   // flush what we have.
@@ -831,32 +891,32 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               }
 
               private void flush(boolean done) {
-                if (!done && keyValues.isEmpty()) {
+                int keyValuesCount = responseBuilder.getKeyValuesCount();
+                if (!done && keyValuesCount == 0) {
                   return;
                 }
                 batches.incrementAndGet();
                 rangeGetBatches.incrementAndGet();
-                rowsRead.addAndGet(keyValues.size());
+                rowsRead.addAndGet(keyValuesCount);
                 if (logger.isDebugEnabled()) {
                   String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
                       " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
-                      ", flushing: " + keyValues.size() + " rows, done: " + done + " seq_id: " + req.getSequenceId();
+                      ", flushing: " + keyValuesCount + " rows, done: " + done + " seq_id: " + req.getSequenceId();
                   logger.debug(msg);
                   opSpan.event(msg);
                 }
                 synchronized (responseObserver) {
                   responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setGetRange(GetRangeResponse.newBuilder().
+                      setGetRange(responseBuilder.
                           setDone(done).
-                          addAllKeyValues(keyValues).
                           setSequenceId(req.getSequenceId()).
                           build()).
                       build());
                 }
-                keyValues.clear();
+                responseBuilder.clear();
               }
             };
-            iterator.onHasNext().whenComplete(hasNextConsumer);
+            iterator.onHasNext().whenComplete(hasNextConsumer);*/
           }
         } else if (value.hasAddConflictKey()) {
           hasActiveTransactionOrThrow();
