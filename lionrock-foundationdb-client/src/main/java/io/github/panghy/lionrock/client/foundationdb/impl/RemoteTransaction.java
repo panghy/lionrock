@@ -19,7 +19,6 @@ import io.grpc.stub.StreamObserver;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -107,14 +106,6 @@ public class RemoteTransaction implements TransactionMixin {
   private final Collection<CompletableFuture<?>> futures = new ArrayList<>();
   private final CompletableFuture<Void> commitFuture = new CompletableFuture<>();
   private final CompletableFuture<byte[]> versionStampFuture = newCompletableFuture("getVersionstamp");
-
-  /**
-   * Only need to fetch GRV once (unless we reset the read version).
-   */
-  volatile CompletableFuture<GetReadVersionResponse> getReadVersionResponse =
-      newCompletableFuture("getReadVersion");
-  final AtomicBoolean getReadVersionSent = new AtomicBoolean(false);
-
   /**
    * Whether this is a read-only transaction. Versionstamp fetches and commit version can be optimized.
    */
@@ -568,44 +559,26 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Long> getReadVersion() {
     assertTransactionState();
-    if (getReadVersionResponse.isDone()) {
-      if (remoteTransactionContext.getMillisecondsLeft() <= 0) {
-        return CompletableFuture.failedFuture(new FDBException("Operation timed out", 1004));
+    CompletableFuture<Long> toReturn = newCompletableFuture("getReadVersion");
+    long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
+      @Override
+      public void handleGetReadVersion(GetReadVersionResponse resp) {
+        toReturn.complete(resp.getReadVersion());
       }
-      return getReadVersionResponse.thenApply(GetReadVersionResponse::getReadVersion);
+    }, toReturn);
+    synchronized (requestSink) {
+      requestSink.onNext(StreamingDatabaseRequest.newBuilder().
+          setGetReadVersion(GetReadVersionRequest.newBuilder().
+              setSequenceId(curr).
+              build()).
+          build());
     }
-    // lock since we might change both getReadVersionSent and getReadVersionResponse.
-    synchronized (getReadVersionSent) {
-      if (!getReadVersionSent.getAndSet(true)) {
-        // must use closure.
-        final CompletableFuture<GetReadVersionResponse> cf =
-            RemoteTransaction.this.getReadVersionResponse;
-        long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
-          @Override
-          public void handleGetReadVersion(GetReadVersionResponse resp) {
-            cf.complete(resp);
-          }
-        }, cf);
-        synchronized (requestSink) {
-          requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-              setGetReadVersion(GetReadVersionRequest.newBuilder().
-                  setSequenceId(curr).
-                  build()).
-              build());
-        }
-      }
-    }
-    return getReadVersionResponse.thenApply(GetReadVersionResponse::getReadVersion);
+    return toReturn;
   }
 
   @Override
   public void setReadVersion(long version) {
     assertTransactionState();
-    // lock since we are changing both getReadVersionSent and getReadVersionResponse.
-    synchronized (getReadVersionSent) {
-      getReadVersionSent.set(false);
-      getReadVersionResponse = newCompletableFuture("getReadVersion");
-    }
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetReadVersion(
               SetReadVersionRequest.newBuilder().setReadVersion(version).build()).
@@ -619,12 +592,6 @@ public class RemoteTransaction implements TransactionMixin {
   }
 
   private CompletableFuture<byte[]> get(byte[] key, boolean snapshot) {
-    if (Arrays.equals(key, METADATA_VERSION_KEY)) {
-      if (!getReadVersionSent.get()) {
-        getReadVersion();
-      }
-      return getReadVersionResponse.thenApply(x -> x.getMetadataVersion().toByteArray());
-    }
     assertTransactionState();
     CompletableFuture<byte[]> toReturn = newCompletableFuture("get: " + printable(key));
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {

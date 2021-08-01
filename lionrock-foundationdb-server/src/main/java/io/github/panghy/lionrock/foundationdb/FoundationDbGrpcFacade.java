@@ -8,7 +8,6 @@ import com.apple.foundationdb.async.AsyncIterable;
 import com.apple.foundationdb.async.AsyncIterator;
 import com.apple.foundationdb.async.AsyncUtil;
 import com.apple.foundationdb.async.CloseableAsyncIterator;
-import com.apple.foundationdb.tuple.ByteArrayUtil;
 import com.google.common.base.Joiner;
 import com.google.common.base.Throwables;
 import com.google.protobuf.ByteString;
@@ -29,9 +28,7 @@ import org.springframework.cloud.sleuth.Span;
 import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.Nonnull;
 import javax.annotation.PostConstruct;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,18 +49,6 @@ import static java.util.concurrent.CompletableFuture.completedFuture;
 public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreImplBase {
 
   Logger logger = LoggerFactory.getLogger(FoundationDbGrpcFacade.class);
-
-  /**
-   * The prefix under which all FDB system and special data live. Regular user operations typically cannot read keys
-   * with this prefix unless they set special options except in special circumstances.
-   */
-  private static final byte[] SYSTEM_PREFIX = {(byte) 0xff};
-
-  public static final byte[] METADATA_VERSION_KEY = systemPrefixedKey("/metadataVersion");
-
-  private static byte[] systemPrefixedKey(@Nonnull String key) {
-    return ByteArrayUtil.join(SYSTEM_PREFIX, key.getBytes(StandardCharsets.US_ASCII));
-  }
 
   @Autowired
   Configuration config;
@@ -924,41 +909,32 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           // start the span/scope for the get_value call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_read_version");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          tx.getReadVersion().
-              thenCombine(tx.get(METADATA_VERSION_KEY), (readVersion, metadataVersion) -> {
-                GetReadVersionResponse.Builder builder = GetReadVersionResponse.newBuilder().
-                    setReadVersion(readVersion).
-                    setSequenceId(req.getSequenceId());
-                if (metadataVersion != null) {
-                  builder.setMetadataVersion(ByteString.copyFrom(metadataVersion));
+          tx.getReadVersion().whenComplete((val, throwable) -> {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable, () -> "failed to get read version");
+                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
+              } else {
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetReadVersion is: " + val + " seq_id: " + req.getSequenceId();
+                  logger.debug(msg);
+                  opSpan.event(msg);
                 }
-                return builder.build();
-              }).whenComplete((getReadVersionResponse, throwable) -> {
-                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
-                  if (throwable != null) {
-                    handleThrowable(opSpan, throwable, () -> "failed to get read version");
-                    sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
-                  } else {
-                    if (logger.isDebugEnabled()) {
-                      byte[] metadataVersion = getReadVersionResponse.hasMetadataVersion() ?
-                          getReadVersionResponse.getMetadataVersion().toByteArray() : null;
-                      String msg = "GetReadVersion is: " + getReadVersionResponse.getReadVersion() +
-                          " metadataVersion: " + printable(metadataVersion) + " seq_id: " + req.getSequenceId();
-                      logger.debug(msg);
-                      opSpan.event(msg);
-                    }
-                    this.getReadVersion.incrementAndGet();
-                    synchronized (responseObserver) {
-                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                          setGetReadVersion(getReadVersionResponse).
-                          build());
-                    }
-                  }
-                } finally {
-                  opScope.close();
-                  opSpan.end();
+                this.getReadVersion.incrementAndGet();
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetReadVersion(GetReadVersionResponse.newBuilder().
+                          setReadVersion(val).
+                          setSequenceId(req.getSequenceId()).
+                          build()).
+                      build());
                 }
-              });
+              }
+            } finally {
+              opScope.close();
+              opSpan.end();
+            }
+          });
         } else if (value.hasSetReadVersion()) {
           hasActiveTransactionOrThrow();
           if (logger.isDebugEnabled()) {

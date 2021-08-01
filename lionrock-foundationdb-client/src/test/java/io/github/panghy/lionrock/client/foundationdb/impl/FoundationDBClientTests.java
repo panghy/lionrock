@@ -14,8 +14,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
-import static io.github.panghy.lionrock.client.foundationdb.mixins.ReadTransactionMixin.METADATA_VERSION_KEY;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
@@ -722,21 +720,5 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     String[] join = db.runAsync(tx -> RemoteLocalityUtil.
         getAddressesForKey(tx, "hello".getBytes(StandardCharsets.UTF_8))).join();
     assertTrue(join.length > 0);
-  }
-
-  @Test
-  public void testGetMetadataVersion() {
-    byte[] vs = db.run(tx -> {
-      tx.mutate(MutationType.SET_VERSIONSTAMPED_VALUE, METADATA_VERSION_KEY,
-          new byte[14]);
-      return tx.getVersionstamp();
-    }).join();
-    byte[] cf = db.runAsync(tx -> tx.getReadVersion().
-        thenCompose(x -> ((RemoteTransaction) tx).getReadVersionResponse).
-        thenCompose(grv -> {
-          assertTrue(grv.hasMetadataVersion());
-          return tx.get(METADATA_VERSION_KEY);
-        })).join();
-    assertArrayEquals(vs, cf, () -> printable(vs) + " != " + printable(cf));
   }
 }
