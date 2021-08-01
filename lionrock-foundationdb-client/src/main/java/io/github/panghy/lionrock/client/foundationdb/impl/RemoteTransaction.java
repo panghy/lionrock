@@ -218,18 +218,18 @@ public class RemoteTransaction implements TransactionMixin {
 
     @Override
     public CompletableFuture<byte[]> get(byte[] key) {
-      return RemoteTransaction.this.get(key);
+      return RemoteTransaction.this.get(key, true);
     }
 
     @Override
     public CompletableFuture<byte[]> getKey(KeySelector selector) {
-      return RemoteTransaction.this.getKey(selector);
+      return RemoteTransaction.this.getKey(selector, true);
     }
 
     @Override
     public AsyncIterable<KeyValue> getRange(KeySelector begin, KeySelector end, int limit, boolean reverse,
                                             StreamingMode mode) {
-      return RemoteTransaction.this.getRange(begin, end, limit, reverse, mode);
+      return RemoteTransaction.this.getRange(begin, end, limit, reverse, mode, true);
     }
 
     @Override
@@ -594,6 +594,10 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public CompletableFuture<byte[]> get(byte[] key) {
+    return get(key, false);
+  }
+
+  private CompletableFuture<byte[]> get(byte[] key, boolean snapshot) {
     assertTransactionState();
     CompletableFuture<byte[]> toReturn = newCompletableFuture("get: " + printable(key));
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
@@ -606,6 +610,7 @@ public class RemoteTransaction implements TransactionMixin {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().
           setGetValue(GetValueRequest.newBuilder().
               setKey(ByteString.copyFrom(key)).
+              setSnapshot(snapshot).
               setSequenceId(curr).
               build()).
           build());
@@ -615,6 +620,10 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public CompletableFuture<byte[]> getKey(KeySelector selector) {
+    return getKey(selector, false);
+  }
+
+  private CompletableFuture<byte[]> getKey(KeySelector selector, boolean snapshot) {
     assertTransactionState();
     CompletableFuture<byte[]> toReturn = newCompletableFuture("getKey");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
@@ -626,6 +635,7 @@ public class RemoteTransaction implements TransactionMixin {
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().
           setGetKey(GetKeyRequest.newBuilder().setKeySelector(keySelector(selector)).
+              setSnapshot(snapshot).
               setSequenceId(curr).
               build()).
           build());
@@ -636,6 +646,11 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public AsyncIterable<KeyValue> getRange(KeySelector begin, KeySelector end, int limit, boolean reverse,
                                           StreamingMode mode) {
+    return getRange(begin, end, limit, reverse, mode, false);
+  }
+
+  private AsyncIterable<KeyValue> getRange(KeySelector begin, KeySelector end, int limit, boolean reverse,
+                                           StreamingMode mode, boolean snapshot) {
     io.github.panghy.lionrock.proto.StreamingMode streamingMode =
         io.github.panghy.lionrock.proto.StreamingMode.ITERATOR;
     switch (mode) {
@@ -680,6 +695,7 @@ public class RemoteTransaction implements TransactionMixin {
                     setLimit(limit).
                     setReverse(reverse).
                     setStreamingMode(finalStreamingMode).
+                    setSnapshot(snapshot).
                     setSequenceId(curr).
                     build()).
                 build());
