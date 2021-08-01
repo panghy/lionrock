@@ -20,6 +20,8 @@ subprojects {
 
 release {
     tagTemplate = 'v${version}'
+    // TODO remove once we have a record layer build.
+    failOnSnapshotDependencies = false
 }
 
 // tag::coverageTask[]
