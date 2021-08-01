@@ -3,7 +3,10 @@ package io.github.panghy.lionrock.client.foundationdb.mixins;
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
 import com.apple.foundationdb.async.AsyncUtil;
+import com.apple.foundationdb.tuple.ByteArrayUtil;
 
+import javax.annotation.Nonnull;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -13,6 +16,18 @@ import java.util.function.Function;
  * @author Clement Pang
  */
 public interface ReadTransactionMixin extends ReadTransaction {
+
+  /**
+   * The prefix under which all FDB system and special data live. Regular user operations typically cannot read keys
+   * with this prefix unless they set special options except in special circumstances.
+   */
+  byte[] SYSTEM_PREFIX = {(byte) 0xff};
+
+  byte[] METADATA_VERSION_KEY = systemPrefixedKey("/metadataVersion");
+
+  private static byte[] systemPrefixedKey(@Nonnull String key) {
+    return ByteArrayUtil.join(SYSTEM_PREFIX, key.getBytes(StandardCharsets.US_ASCII));
+  }
 
   ///////////////////
   //  getRange -> KeySelectors
