@@ -67,9 +67,6 @@ public class SequenceResponseDemuxer {
     } else if (resp.hasOperationFailure()) {
       StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getOperationFailure().getSequenceId());
       executor.execute(() -> visitor.handleOperationFailure(resp.getOperationFailure()));
-    } else if (resp.hasGetVersionstamp()) {
-      StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetVersionstamp().getSequenceId());
-      executor.execute(() -> visitor.handleGetVersionstamp(resp.getGetVersionstamp()));
     } else if (resp.hasGetReadVersion()) {
       StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetReadVersion().getSequenceId());
       executor.execute(() -> visitor.handleGetReadVersion(resp.getGetReadVersion()));

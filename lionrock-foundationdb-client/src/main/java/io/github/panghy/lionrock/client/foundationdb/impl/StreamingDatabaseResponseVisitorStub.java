@@ -21,9 +21,6 @@ public interface StreamingDatabaseResponseVisitorStub extends StreamingDatabaseR
   default void handleOperationFailure(OperationFailureResponse resp) {
   }
 
-  default void handleGetVersionstamp(GetVersionstampResponse resp) {
-  }
-
   default void handleGetReadVersion(GetReadVersionResponse resp) {
   }
 

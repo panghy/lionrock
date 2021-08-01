@@ -6,6 +6,7 @@ import com.apple.foundationdb.MutationType;
 import com.apple.foundationdb.StreamingMode;
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
+import com.google.common.base.Throwables;
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.client.foundationdb.impl.collections.GrpcAsyncIterable;
 import io.github.panghy.lionrock.client.foundationdb.mixins.ReadTransactionMixin;
@@ -123,6 +124,11 @@ public class RemoteTransaction implements TransactionMixin {
       public void onNext(StreamingDatabaseResponse value) {
         if (value.hasCommitTransaction()) {
           commitResponse.set(value.getCommitTransaction());
+          if (value.getCommitTransaction().hasVersionstamp()) {
+            versionStampFuture.complete(value.getCommitTransaction().getVersionstamp().toByteArray());
+          } else if (!versionStampFuture.isDone()) {
+            versionStampFuture.completeExceptionally(new FDBException("no_versionstamp_from_server", 4100));
+          }
           completed.set(true);
           commitFuture.complete(null);
         } else {
@@ -391,19 +397,6 @@ public class RemoteTransaction implements TransactionMixin {
       completed.set(true);
       commitFuture.complete(null);
     } else {
-      // request Versionstamp.
-      long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
-        @Override
-        public void handleGetVersionstamp(GetVersionstampResponse resp) {
-          versionStampFuture.complete(resp.getVersionstamp().toByteArray());
-        }
-      }, versionStampFuture);
-      synchronized (requestSink) {
-        requestSink.onNext(StreamingDatabaseRequest.newBuilder().
-            setGetVersionstamp(
-                GetVersionstampRequest.newBuilder().setSequenceId(curr).build()).
-            build());
-      }
       synchronized (requestSink) {
         requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
                 CommitTransactionRequest.newBuilder().build()).
@@ -489,12 +482,13 @@ public class RemoteTransaction implements TransactionMixin {
 
   public static Throwable unwrapFdbException(Throwable e) {
     // ununwrap an fdb error within StatusRuntimeException if necessary.
-    if (e instanceof StatusRuntimeException) {
-      Metadata trailers = ((StatusRuntimeException) e).getTrailers();
+    Throwable rootCause = Throwables.getRootCause(e);
+    if (rootCause instanceof StatusRuntimeException) {
+      Metadata trailers = ((StatusRuntimeException) rootCause).getTrailers();
       if (trailers != null) {
         if (trailers.containsKey(FDB_ERROR_CODE_KEY)) {
           String codeStr = trailers.get(FDB_ERROR_CODE_KEY);
-          String message = e.getMessage();
+          String message = rootCause.getMessage();
           if (trailers.containsKey(FDB_ERROR_MESSAGE_KEY)) {
             message = trailers.get(FDB_ERROR_MESSAGE_KEY);
           }
@@ -504,7 +498,7 @@ public class RemoteTransaction implements TransactionMixin {
           } catch (NumberFormatException ignored) {
           }
           FDBException toReturn = new FDBException(message, code);
-          toReturn.initCause(e);
+          toReturn.initCause(rootCause);
           return toReturn;
         }
       }
@@ -834,11 +828,6 @@ public class RemoteTransaction implements TransactionMixin {
       @Override
       public void handleGetRange(GetRangeResponse resp) {
         visitor.handleGetRange(resp);
-      }
-
-      @Override
-      public void handleGetVersionstamp(GetVersionstampResponse resp) {
-        visitor.handleGetVersionstamp(resp);
       }
 
       @Override
