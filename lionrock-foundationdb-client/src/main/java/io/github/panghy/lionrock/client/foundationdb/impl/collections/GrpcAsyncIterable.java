@@ -43,7 +43,7 @@ public class GrpcAsyncIterable<T, Resp> implements AsyncIterable<T> {
   @Override
   public AsyncIterator<T> iterator() {
     GrpcAsyncIterator<T, Resp> grpcAsyncIterator = new GrpcAsyncIterator<>(
-        removalCallback, respToStreamFunction, isDoneFunction);
+        removalCallback, respToStreamFunction, isDoneFunction, executorService);
     this.fetchIssuer.issue(grpcAsyncIterator::accept, grpcAsyncIterator::accept);
     return grpcAsyncIterator;
   }
