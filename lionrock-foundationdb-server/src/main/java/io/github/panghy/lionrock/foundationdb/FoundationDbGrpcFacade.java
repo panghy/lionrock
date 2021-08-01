@@ -925,7 +925,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_read_version");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
           tx.getReadVersion().
-              thenCombine(tx.get(METADATA_VERSION_KEY), (readVersion, metadataVersion) -> {
+              thenCombine(tx.snapshot().get(METADATA_VERSION_KEY), (readVersion, metadataVersion) -> {
                 GetReadVersionResponse.Builder builder = GetReadVersionResponse.newBuilder().
                     setReadVersion(readVersion).
                     setSequenceId(req.getSequenceId());
