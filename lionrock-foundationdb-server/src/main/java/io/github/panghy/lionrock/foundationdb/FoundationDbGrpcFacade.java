@@ -578,6 +578,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   CompletableFuture.allOf(longLivingFutures.toArray(CompletableFuture[]::new)).
                       whenComplete((val, y) -> {
                         logger.debug("server onCompleted()");
+                        synchronized (responseObserver) {
+                          responseObserver.onCompleted();
+                        }
                         populateOverallSpanStats();
                         if (tx != null) {
                           tx.close();
