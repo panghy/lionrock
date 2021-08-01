@@ -129,7 +129,7 @@ public class RemoteTransaction implements TransactionMixin {
           } else if (!versionStampFuture.isDone()) {
             versionStampFuture.completeExceptionally(new FDBException("no_versionstamp_from_server", 4100));
           }
-          completed.set(true);
+          close();
           commitFuture.complete(null);
         } else {
           demuxer.accept(value);
@@ -394,7 +394,7 @@ public class RemoteTransaction implements TransactionMixin {
     }
     if (readOnlyTx.get()) {
       versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
-      completed.set(true);
+      close();
       commitFuture.complete(null);
     } else {
       synchronized (requestSink) {
@@ -540,10 +540,11 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void close() {
-    completed.set(true);
-    // wait until all outstanding futures complete before closing the connection to the server.
-    CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).
-        whenComplete((unused, throwable) -> requestSink.onCompleted());
+    if (!completed.getAndSet(true)) {
+      // wait until all outstanding futures complete before closing the connection to the server.
+      CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).
+          whenComplete((unused, throwable) -> requestSink.onCompleted());
+    }
   }
 
   @Override
@@ -864,6 +865,15 @@ public class RemoteTransaction implements TransactionMixin {
       ((NamedCompletableFuture<?>) future).addBaggage("seq_id", String.valueOf(curr));
     }
     return curr;
+  }
+
+  @Override
+  protected void finalize() throws Throwable {
+    try {
+      close();
+    } finally {
+      super.finalize();
+    }
   }
 
   /**
