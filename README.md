@@ -195,14 +195,15 @@ exceptions or otherwise).
 The API for FoundationDB allows the user to interact with Transaction objects even after the transaction commits
 (getVersionstamp() or getCommittedVersion() comes to mind). Watches also survive longer than even when the Transaction
 is explicitly closed() (implying that resources w.r.t. the Transaction should be reclaimed). All such properties mean
-that we cannot close the connection from the server to the client when we observe a commit. We can't also close the
-connection when close() is explicitly called on the client-side Transaction either.
+that we cannot close the connection from the server to the client when we observe a commit all the time. We can't also
+close the connection when close() is explicitly called on the client-side Transaction either.
 
 Currently, the design of connection lifecycling is such that the client takes the initiative on closing the connection
 (server timeouts not-withstanding), when all watches have been resolved and the client-side Transaction is closed(), we
 assume no additional operation is possible against the transaction context and at that point, we let the server know
 that the connection can be closed (gRPC multiplexes requests on a single connection so the cost of maintaining many open
-connections is not as significant as one would think).
+connections is not as significant as one would think). We also send the versionstamp and commit version proactively from
+the server so that when all long living futures are complete, we also terminate the connection to the client.
 
 When a connection error occurs (or when the transaction itself errors out; we fail the gRPC request entirely when
 transaction commit fails), we need to make sure that all outstanding client-side CompletableFutures are marked as

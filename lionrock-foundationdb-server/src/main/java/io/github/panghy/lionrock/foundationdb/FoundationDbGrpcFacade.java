@@ -551,8 +551,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           handleException(tx.commit(), opSpan, responseObserver,
               "failed to commit transaction").
               whenComplete((x, throwable) -> {
-                if (throwable == null) {
-                  try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+                  if (throwable == null) {
                     synchronized (responseObserver) {
                       responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
                           setCommitTransaction(CommitTransactionResponse.newBuilder().
@@ -564,6 +564,15 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                       logger.debug(msg);
                     }
                   }
+                  // terminate the connection to the client when all long living futures are done.
+                  CompletableFuture.allOf(longLivingFutures.toArray(CompletableFuture[]::new)).
+                      whenComplete((val, y) -> {
+                        logger.debug("server onCompleted()");
+                        populateOverallSpanStats();
+                        if (tx != null) {
+                          tx.close();
+                        }
+                      });
                 }
                 opScope.close();
                 opSpan.end();
