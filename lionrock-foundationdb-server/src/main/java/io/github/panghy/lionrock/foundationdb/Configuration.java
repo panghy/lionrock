@@ -22,6 +22,19 @@ public class Configuration {
 
   private List<Cluster> clusters = new ArrayList<>();
 
+  /**
+   * Internal options (mainly for testing).
+   */
+  private InternalOptions internal = new InternalOptions();
+
+  public InternalOptions getInternal() {
+    return internal;
+  }
+
+  public void setInternal(InternalOptions internal) {
+    this.internal = internal;
+  }
+
   public int getFdbVersion() {
     return fdbVersion;
   }
@@ -64,6 +77,49 @@ public class Configuration {
 
     public void setName(String name) {
       this.name = name;
+    }
+  }
+
+  /**
+   * Internal options to simulate different behaviors.
+   */
+  public static class InternalOptions {
+    /**
+     * Whether getRange requests are internally translated to asList() async calls and returned as a single batch.
+     */
+    private boolean useAsListForRangeGets = false;
+    /**
+     * Whether getRange requests that are internally translated as a single asList() async calls would be re-partitioned
+     * again as multiple response objects.
+     */
+    private boolean simulatePartitionsForAsListRangeGets = false;
+    /**
+     * If {@link #simulatePartitionsForAsListRangeGets} is enabled, the max size of each partition.
+     */
+    private int partitionSizeForAsListRangeGets = 50;
+
+    public boolean isUseAsListForRangeGets() {
+      return useAsListForRangeGets;
+    }
+
+    public void setUseAsListForRangeGets(boolean useAsListForRangeGets) {
+      this.useAsListForRangeGets = useAsListForRangeGets;
+    }
+
+    public boolean isSimulatePartitionsForAsListRangeGets() {
+      return simulatePartitionsForAsListRangeGets;
+    }
+
+    public void setSimulatePartitionsForAsListRangeGets(boolean simulatePartitionsForAsListRangeGets) {
+      this.simulatePartitionsForAsListRangeGets = simulatePartitionsForAsListRangeGets;
+    }
+
+    public int getPartitionSizeForAsListRangeGets() {
+      return partitionSizeForAsListRangeGets;
+    }
+
+    public void setPartitionSizeForAsListRangeGets(int partitionSizeForAsListRangeGets) {
+      this.partitionSizeForAsListRangeGets = partitionSizeForAsListRangeGets;
     }
   }
 }

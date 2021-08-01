@@ -5,6 +5,7 @@ import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.StreamingMode;
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
+import com.apple.foundationdb.async.AsyncIterator;
 import com.apple.foundationdb.async.AsyncUtil;
 import com.apple.foundationdb.async.CloseableAsyncIterator;
 import com.google.common.base.Joiner;
@@ -765,158 +766,13 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             AsyncIterable<KeyValue> range = req.getSnapshot() ?
                 tx.snapshot().getRange(start, end, req.getLimit(), req.getReverse(), mode) :
                 tx.getRange(start, end, req.getLimit(), req.getReverse(), mode);
-            // asList() method.
-            Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-            range.asList().whenComplete((results, throwable) -> {
-              try (Tracer.SpanInScope ignored1 = tracer.withSpan(opSpan)) {
-                if (throwable != null) {
-                  handleThrowable(opSpan, throwable,
-                      () -> "failed to get range for start: " + start + " end: " + end +
-                          " reverse: " + req.getReverse() + " limit: " + req.getLimit() +
-                          " mode: " + req.getStreamingMode());
-                  sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
-                } else {
-                  opSpan.tag("rows_read", String.valueOf(results.size()));
-                  opSpan.tag("batches", String.valueOf(1));
-                  if (logger.isDebugEnabled()) {
-                    String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
-                        " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
-                        ", flushing: " + results.size() + " rows, seq_id: " + req.getSequenceId();
-                    logger.debug(msg);
-                    opSpan.event(msg);
-                  }
-                  if (results.isEmpty()) {
-                    synchronized (responseObserver) {
-                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                          setGetRange(GetRangeResponse.newBuilder().
-                              setDone(true).
-                              setSequenceId(req.getSequenceId()).build()).
-                          build());
-                    }
-                  }
-                  List<List<KeyValue>> parts = Lists.partition(results, 25);
-                  for (int i = 0; i < parts.size(); i++) {
-                    List<KeyValue> keyValues = parts.get(i);
-                    boolean done = (i == parts.size() - 1);
-                    if (logger.isDebugEnabled()) {
-                      String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
-                          " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
-                          ", flushing: " + keyValues.size() + " rows, done: " + done +
-                          ", seq_id: " + req.getSequenceId();
-                      logger.debug(msg);
-                      opSpan.event(msg);
-                    }
-                    GetRangeResponse.Builder builder = GetRangeResponse.newBuilder().
-                        setDone(done).
-                        setSequenceId(req.getSequenceId());
-                    for (KeyValue result : keyValues) {
-                      builder.addKeyValuesBuilder().
-                          setKey(ByteString.copyFrom(result.getKey())).
-                          setValue(ByteString.copyFrom(result.getValue()));
-                    }
-                    synchronized (responseObserver) {
-                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                          setGetRange(builder.build()).
-                          build());
-                    }
-                  }
-                }
-              } finally {
-                opScope.close();
-                opSpan.end();
-              }
-            });
-            // iterator method.
-            /*AsyncIterator<KeyValue> iterator = range.iterator();
-            // consumer that collects key values and returns them to the user.
-            AtomicLong rows = new AtomicLong();
-            AtomicLong batches = new AtomicLong();
-            BiConsumer<Boolean, Throwable> hasNextConsumer = new BiConsumer<>() {
-
-              private final GetRangeResponse.Builder responseBuilder = GetRangeResponse.newBuilder();
-
-              @Override
-              public void accept(Boolean hasNext, Throwable throwable) {
-                try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
-                  boolean done = false;
-                  if (throwable != null) {
-                    handleThrowable(opSpan, throwable,
-                        () -> "failed to get range for start: " + start + " end: " + end +
-                            " reverse: " + req.getReverse() + " limit: " + req.getLimit() +
-                            " mode: " + req.getStreamingMode());
-                    OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
-                        setSequenceId(value.getGetRange().getSequenceId()).
-                        setMessage(throwable.getMessage());
-                    if (throwable instanceof FDBException) {
-                      builder.setCode(((FDBException) throwable).getCode());
-                    }
-                    opSpan.tag("rows_read", String.valueOf(rows.get()));
-                    opSpan.tag("batches", String.valueOf(batches.get()));
-                    opSpan.end();
-                    synchronized (responseObserver) {
-                      responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                          setOperationFailure(builder.build()).
-                          build());
-                    }
-                    return;
-                  } else if (!hasNext) {
-                    // no more rows to read, flush the last message.
-                    done = true;
-                  } else {
-                    // spool everything until the onHasNext CompletableFuture is pending.
-                    while (iterator.onHasNext().isDone() &&
-                        !iterator.onHasNext().isCompletedExceptionally()) {
-                      if (!iterator.hasNext()) {
-                        done = true;
-                        break;
-                      }
-                      KeyValue next = iterator.next();
-                      rows.incrementAndGet();
-                      responseBuilder.addKeyValuesBuilder().
-                          setKey(ByteString.copyFrom(next.getKey())).
-                          setValue(ByteString.copyFrom(next.getValue()));
-                    }
-                  }
-                  // flush what we have.
-                  flush(done);
-                  if (done) {
-                    opSpan.tag("rows_read", String.valueOf(rows.get()));
-                    opSpan.tag("batches", String.valueOf(batches.get()));
-                    opSpan.end();
-                  } else {
-                    // schedule the callback on when the future is ready.
-                    iterator.onHasNext().whenComplete(this);
-                  }
-                }
-              }
-
-              private void flush(boolean done) {
-                int keyValuesCount = responseBuilder.getKeyValuesCount();
-                if (!done && keyValuesCount == 0) {
-                  return;
-                }
-                batches.incrementAndGet();
-                rangeGetBatches.incrementAndGet();
-                rowsRead.addAndGet(keyValuesCount);
-                if (logger.isDebugEnabled()) {
-                  String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
-                      " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
-                      ", flushing: " + keyValuesCount + " rows, done: " + done + " seq_id: " + req.getSequenceId();
-                  logger.debug(msg);
-                  opSpan.event(msg);
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setGetRange(responseBuilder.
-                          setDone(done).
-                          setSequenceId(req.getSequenceId()).
-                          build()).
-                      build());
-                }
-                responseBuilder.clear();
-              }
-            };
-            iterator.onHasNext().whenComplete(hasNextConsumer);*/
+            if (config.getInternal().isUseAsListForRangeGets()) {
+              // asList() method.
+              handleRangeGetWithAsList(req, opSpan, start, end, range);
+            } else {
+              // iterator method.
+              handleRangeGetWithAsyncIterator(value, req, opSpan, start, end, range);
+            }
           }
         } else if (value.hasAddConflictKey()) {
           hasActiveTransactionOrThrow();
@@ -1324,6 +1180,197 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
           });
         }
+      }
+
+      /**
+       * Use asList() with range gets (only enabled via
+       * {@link Configuration.InternalOptions#isUseAsListForRangeGets()}.
+       * <p>
+       * Normally, calls are routed to
+       * {@link #handleRangeGetWithAsyncIterator(StreamingDatabaseRequest, GetRangeRequest, Span, KeySelector, KeySelector, AsyncIterable)}
+       */
+      private void handleRangeGetWithAsList(GetRangeRequest req, Span opSpan,
+                                            KeySelector start, KeySelector end, AsyncIterable<KeyValue> range) {
+        Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
+        range.asList().whenComplete((results, throwable) -> {
+          try (Tracer.SpanInScope ignored1 = tracer.withSpan(opSpan)) {
+            if (throwable != null) {
+              handleThrowable(opSpan, throwable,
+                  () -> "failed to get range for start: " + start + " end: " + end +
+                      " reverse: " + req.getReverse() + " limit: " + req.getLimit() +
+                      " mode: " + req.getStreamingMode());
+              sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
+            } else {
+              opSpan.tag("rows_read", String.valueOf(results.size()));
+              opSpan.tag("batches", String.valueOf(1));
+              if (logger.isDebugEnabled()) {
+                String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                    " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
+                    ", flushing: " + results.size() + " rows, seq_id: " + req.getSequenceId();
+                logger.debug(msg);
+                opSpan.event(msg);
+              }
+              if (config.getInternal().isSimulatePartitionsForAsListRangeGets()) {
+                if (results.isEmpty()) {
+                  synchronized (responseObserver) {
+                    responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                        setGetRange(GetRangeResponse.newBuilder().
+                            setDone(true).
+                            setSequenceId(req.getSequenceId()).build()).
+                        build());
+                  }
+                }
+                List<List<KeyValue>> parts = Lists.partition(results,
+                    config.getInternal().getPartitionSizeForAsListRangeGets());
+                for (int i = 0; i < parts.size(); i++) {
+                  List<KeyValue> keyValues = parts.get(i);
+                  boolean done = (i == parts.size() - 1);
+                  if (logger.isDebugEnabled()) {
+                    String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                        " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
+                        ", flushing: " + keyValues.size() + " rows, done: " + done +
+                        ", seq_id: " + req.getSequenceId();
+                    logger.debug(msg);
+                    opSpan.event(msg);
+                  }
+                  GetRangeResponse.Builder builder = GetRangeResponse.newBuilder().
+                      setDone(done).
+                      setSequenceId(req.getSequenceId());
+                  for (KeyValue result : keyValues) {
+                    builder.addKeyValuesBuilder().
+                        setKey(ByteString.copyFrom(result.getKey())).
+                        setValue(ByteString.copyFrom(result.getValue()));
+                  }
+                  synchronized (responseObserver) {
+                    responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                        setGetRange(builder.build()).
+                        build());
+                  }
+                }
+              } else {
+                // do not partition, send as a single batch.
+                if (logger.isDebugEnabled()) {
+                  String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                      " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
+                      ", flushing: " + results.size() + " rows, done: true, seq_id: " + req.getSequenceId();
+                  logger.debug(msg);
+                  opSpan.event(msg);
+                }
+                GetRangeResponse.Builder builder = GetRangeResponse.newBuilder().
+                    setDone(true).
+                    setSequenceId(req.getSequenceId());
+                for (KeyValue result : results) {
+                  builder.addKeyValuesBuilder().
+                      setKey(ByteString.copyFrom(result.getKey())).
+                      setValue(ByteString.copyFrom(result.getValue()));
+                }
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setGetRange(builder.build()).
+                      build());
+                }
+              }
+            }
+          } finally {
+            opScope.close();
+            opSpan.end();
+          }
+        });
+      }
+
+      private void handleRangeGetWithAsyncIterator(StreamingDatabaseRequest value, GetRangeRequest req,
+                                                   Span opSpan, KeySelector start, KeySelector end,
+                                                   AsyncIterable<KeyValue> range) {
+        AsyncIterator<KeyValue> iterator = range.iterator();
+        // consumer that collects key values and returns them to the user.
+        AtomicLong rows = new AtomicLong();
+        AtomicLong batches = new AtomicLong();
+        BiConsumer<Boolean, Throwable> hasNextConsumer = new BiConsumer<>() {
+
+          private final GetRangeResponse.Builder responseBuilder = GetRangeResponse.newBuilder();
+
+          @Override
+          public void accept(Boolean hasNext, Throwable throwable) {
+            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
+              boolean done = false;
+              if (throwable != null) {
+                handleThrowable(opSpan, throwable,
+                    () -> "failed to get range for start: " + start + " end: " + end +
+                        " reverse: " + req.getReverse() + " limit: " + req.getLimit() +
+                        " mode: " + req.getStreamingMode());
+                OperationFailureResponse.Builder builder = OperationFailureResponse.newBuilder().
+                    setSequenceId(value.getGetRange().getSequenceId()).
+                    setMessage(throwable.getMessage());
+                if (throwable instanceof FDBException) {
+                  builder.setCode(((FDBException) throwable).getCode());
+                }
+                opSpan.tag("rows_read", String.valueOf(rows.get()));
+                opSpan.tag("batches", String.valueOf(batches.get()));
+                opSpan.end();
+                synchronized (responseObserver) {
+                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                      setOperationFailure(builder.build()).
+                      build());
+                }
+                return;
+              } else if (!hasNext) {
+                // no more rows to read, flush the last message.
+                done = true;
+              } else {
+                // spool everything until the onHasNext CompletableFuture is pending.
+                while (iterator.onHasNext().isDone() &&
+                    !iterator.onHasNext().isCompletedExceptionally()) {
+                  if (!iterator.hasNext()) {
+                    done = true;
+                    break;
+                  }
+                  KeyValue next = iterator.next();
+                  rows.incrementAndGet();
+                  responseBuilder.addKeyValuesBuilder().
+                      setKey(ByteString.copyFrom(next.getKey())).
+                      setValue(ByteString.copyFrom(next.getValue()));
+                }
+              }
+              // flush what we have.
+              flush(done);
+              if (done) {
+                opSpan.tag("rows_read", String.valueOf(rows.get()));
+                opSpan.tag("batches", String.valueOf(batches.get()));
+                opSpan.end();
+              } else {
+                // schedule the callback on when the future is ready.
+                iterator.onHasNext().whenComplete(this);
+              }
+            }
+          }
+
+          private void flush(boolean done) {
+            int keyValuesCount = responseBuilder.getKeyValuesCount();
+            if (!done && keyValuesCount == 0) {
+              return;
+            }
+            batches.incrementAndGet();
+            rangeGetBatches.incrementAndGet();
+            rowsRead.addAndGet(keyValuesCount);
+            if (logger.isDebugEnabled()) {
+              String msg = "GetRangeRequest from: " + start + " to: " + end + " reverse: " + req.getReverse() +
+                  " limit: " + req.getLimit() + " mode: " + req.getStreamingMode() +
+                  ", flushing: " + keyValuesCount + " rows, done: " + done + " seq_id: " + req.getSequenceId();
+              logger.debug(msg);
+              opSpan.event(msg);
+            }
+            synchronized (responseObserver) {
+              responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
+                  setGetRange(responseBuilder.
+                      setDone(done).
+                      setSequenceId(req.getSequenceId()).
+                      build()).
+                  build());
+            }
+            responseBuilder.clear();
+          }
+        };
+        iterator.onHasNext().whenComplete(hasNextConsumer);
       }
 
       private void addLongLivingFuture(CompletableFuture<?> future) {
