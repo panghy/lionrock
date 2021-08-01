@@ -9,6 +9,7 @@ import com.apple.foundationdb.async.AsyncIterator;
 import com.apple.foundationdb.async.AsyncUtil;
 import com.apple.foundationdb.async.CloseableAsyncIterator;
 import com.google.common.base.Joiner;
+import com.google.common.base.Throwables;
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.MutationType;
 import io.github.panghy.lionrock.proto.*;
@@ -548,15 +549,22 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           // start the span and scope for the commit transaction call.
           Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.commit_transaction");
           Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          handleException(tx.commit(), opSpan, responseObserver,
+          CompletableFuture<byte[]> versionstampF = tx.getVersionstamp();
+          handleException(tx.commit().thenCompose(x -> versionstampF.exceptionally(ex -> null)),
+              opSpan, responseObserver,
               "failed to commit transaction").
-              whenComplete((x, throwable) -> {
+              whenComplete((versionstamp, throwable) -> {
                 try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
                   if (throwable == null) {
                     synchronized (responseObserver) {
+                      CommitTransactionResponse.Builder builder = CommitTransactionResponse.newBuilder().
+                          setCommittedVersion(tx.getCommittedVersion());
+                      if (versionstamp != null) {
+                        builder.setVersionstamp(ByteString.copyFrom(versionstamp));
+                      }
                       responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                          setCommitTransaction(CommitTransactionResponse.newBuilder().
-                              setCommittedVersion(tx.getCommittedVersion()).build()).build());
+                          setCommitTransaction(builder.build()).
+                          build());
                     }
                     if (logger.isDebugEnabled()) {
                       String msg = "Committed transaction: " + tx.getCommittedVersion();
@@ -972,44 +980,6 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           tx.mutate(getMutationType(value.getMutateValue().getType()),
               value.getMutateValue().getKey().toByteArray(),
               value.getMutateValue().getParam().toByteArray());
-        } else if (value.hasGetVersionstamp()) {
-          hasActiveTransactionOrThrow();
-          GetVersionstampRequest req = value.getGetVersionstamp();
-          throwIfSequenceIdHasBeenSeen(req.getSequenceId());
-          if (logger.isDebugEnabled()) {
-            String msg = "GetVersionstampRequest";
-            logger.debug(msg);
-            if (overallSpan != null) {
-              overallSpan.event(msg);
-            }
-          }// start the span/scope for the get_value call.
-          Span opSpan = tracer.nextSpan(overallSpan).name("execute_transaction.get_versionstamp");
-          Tracer.SpanInScope opScope = tracer.withSpan(opSpan.start());
-          getVersionstamp.incrementAndGet();
-          addLongLivingFuture(tx.getVersionstamp().whenComplete((vs, throwable) -> {
-            try (Tracer.SpanInScope ignored = tracer.withSpan(opSpan)) {
-              if (throwable != null) {
-                handleThrowable(opSpan, throwable, () -> "failed to get versionstamp");
-                sendErrorToRemote(throwable, req.getSequenceId(), responseObserver);
-              } else {
-                if (logger.isDebugEnabled()) {
-                  String msg = "GetVersionstampRequest is: " + printable(vs);
-                  logger.debug(msg);
-                  opSpan.event(msg);
-                }
-                synchronized (responseObserver) {
-                  responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
-                      setGetVersionstamp(GetVersionstampResponse.newBuilder().
-                          setSequenceId(req.getSequenceId()).
-                          setVersionstamp(ByteString.copyFrom(vs)).build()).
-                      build());
-                }
-              }
-            } finally {
-              opScope.close();
-              opSpan.end();
-            }
-          }));
         } else if (value.hasWatchKey()) {
           hasActiveTransactionOrThrow();
           WatchKeyRequest req = value.getWatchKey();
@@ -1482,18 +1452,19 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
   private Metadata handleThrowable(Span span, Throwable throwable, Supplier<String> failureMessage) {
     Metadata exceptionMetadata = new Metadata();
-    if (throwable instanceof FDBException) {
-      span.tag("fdb_error_code", String.valueOf(((FDBException) throwable).getCode())).
-          error(throwable);
-      span.tag("fdb_error_message", throwable.getMessage());
+    Throwable rootCause = Throwables.getRootCause(throwable);
+    if (rootCause instanceof FDBException) {
+      span.tag("fdb_error_code", String.valueOf(((FDBException) rootCause).getCode())).
+          error(rootCause);
+      span.tag("fdb_error_message", rootCause.getMessage());
       exceptionMetadata.put(Metadata.Key.of("fdb_error_code", Metadata.ASCII_STRING_MARSHALLER),
-          String.valueOf(((FDBException) throwable).getCode()));
+          String.valueOf(((FDBException) rootCause).getCode()));
       exceptionMetadata.put(Metadata.Key.of("fdb_error_message", Metadata.ASCII_STRING_MARSHALLER),
-          throwable.getMessage());
+          rootCause.getMessage());
     }
     span.event(failureMessage.get());
-    logger.warn(failureMessage.get(), throwable);
-    span.error(throwable);
+    logger.warn(failureMessage.get(), rootCause);
+    span.error(rootCause);
     return exceptionMetadata;
   }
 

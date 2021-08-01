@@ -17,8 +17,6 @@ public interface StreamingDatabaseResponseVisitor {
 
   void handleOperationFailure(OperationFailureResponse resp);
 
-  void handleGetVersionstamp(GetVersionstampResponse resp);
-
   void handleGetReadVersion(GetReadVersionResponse resp);
 
   void handleWatchKey(WatchKeyResponse resp);

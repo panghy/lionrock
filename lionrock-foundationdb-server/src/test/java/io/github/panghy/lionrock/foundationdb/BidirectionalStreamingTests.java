@@ -613,34 +613,14 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
             build()).
         build());
     serverStub.onNext(StreamingDatabaseRequest.newBuilder().
-        setGetVersionstamp(GetVersionstampRequest.newBuilder().
-            setSequenceId(12345).
-            build()).
-        build());
-    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
         setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
         build());
 
-    verify(streamObs, timeout(5000).times(2)).onNext(streamingDatabaseResponseCapture.capture());
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
 
-    response = streamingDatabaseResponseCapture.getAllValues().get(0);
-    boolean gotCommit = false;
-    boolean gotVersionstamp = false;
-    if (response.hasCommitTransaction()) {
-      gotCommit = true;
-    } else if (response.hasGetVersionstamp()) {
-      gotVersionstamp = true;
-      assertEquals(12345, response.getGetVersionstamp().getSequenceId());
-    }
-    response = streamingDatabaseResponseCapture.getAllValues().get(1);
-    if (response.hasCommitTransaction()) {
-      gotCommit = true;
-    } else if (response.hasGetVersionstamp()) {
-      gotVersionstamp = true;
-      assertEquals(12345, response.getGetVersionstamp().getSequenceId());
-    }
-    assertTrue(gotCommit);
-    assertTrue(gotVersionstamp);
+    response = streamingDatabaseResponseCapture.getValue();
+    assertTrue(response.hasCommitTransaction());
+    assertTrue(response.getCommitTransaction().hasVersionstamp());
 
     serverStub.onCompleted();
     verify(streamObs, never()).onError(any());
