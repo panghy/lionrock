@@ -50,10 +50,10 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
       // eat the response if we have failed already.
       return;
     }
-    if (isDoneFunction.apply(resp)) {
-      done = true;
-    }
     synchronized (responses) {
+      if (isDoneFunction.apply(resp)) {
+        done = true;
+      }
       boolean wasEmpty = responses.isEmpty();
       // just adding more keys.
       respToStreamFunction.apply(resp).
@@ -71,8 +71,10 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
 
   void accept(OperationFailureResponse failure) {
     FDBException ex = new FDBException(failure.getMessage(), (int) failure.getCode());
-    if (!onHasNextFuture.completeExceptionally(ex)) {
-      onHasNextFuture = CompletableFuture.failedFuture(ex);
+    synchronized (responses) {
+      if (!onHasNextFuture.completeExceptionally(ex)) {
+        onHasNextFuture = CompletableFuture.failedFuture(ex);
+      }
     }
   }
 
@@ -81,18 +83,18 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
     if (cancelled) {
       throw new CancellationException();
     }
-    if (!responses.isEmpty()) {
-      // has keys pending to be iterated.
-      return AsyncUtil.READY_TRUE;
-    } else if (onHasNextFuture != null &&
-        (!onHasNextFuture.isDone() || onHasNextFuture.isCompletedExceptionally())) {
-      // already has a future and it isn't done.
-      return onHasNextFuture;
-    } else if (done) {
-      // already done and no responses left.
-      return AsyncUtil.READY_FALSE;
-    }
     synchronized (responses) {
+      if (!responses.isEmpty()) {
+        // has keys pending to be iterated.
+        return AsyncUtil.READY_TRUE;
+      } else if (onHasNextFuture != null &&
+          (!onHasNextFuture.isDone() || onHasNextFuture.isCompletedExceptionally())) {
+        // already has a future and it isn't done.
+        return onHasNextFuture;
+      } else if (done) {
+        // already done and no responses left.
+        return AsyncUtil.READY_FALSE;
+      }
       if (responses.isEmpty() &&
           (onHasNextFuture == null ||
               (onHasNextFuture.isDone() &&
