@@ -569,6 +569,9 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<Long> getReadVersion() {
     assertTransactionState();
     if (getReadVersionResponse.isDone()) {
+      if (remoteTransactionContext.getMillisecondsLeft() <= 0) {
+        return CompletableFuture.failedFuture(new FDBException("Operation timed out", 1004));
+      }
       return getReadVersionResponse.thenApply(GetReadVersionResponse::getReadVersion);
     }
     // lock since we might change both getReadVersionSent and getReadVersionResponse.
