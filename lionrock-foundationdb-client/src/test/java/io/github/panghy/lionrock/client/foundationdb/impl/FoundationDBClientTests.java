@@ -14,6 +14,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
+import static io.github.panghy.lionrock.client.foundationdb.mixins.ReadTransactionMixin.METADATA_VERSION_KEY;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
@@ -132,8 +134,8 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     setupRangeTest(db);
 
     List<KeyValue> results = db.run(tx -> tx.getRange(
-        new KeySelector("hello".getBytes(StandardCharsets.UTF_8), false, 1),
-        new KeySelector("hello3".getBytes(StandardCharsets.UTF_8), false, 1), 3, true, StreamingMode.WANT_ALL).
+            new KeySelector("hello".getBytes(StandardCharsets.UTF_8), false, 1),
+            new KeySelector("hello3".getBytes(StandardCharsets.UTF_8), false, 1), 3, true, StreamingMode.WANT_ALL).
         asList().join());
     assertEquals(3, results.size());
     assertTrue(results.contains(new KeyValue(HELLO_B, WORLD_B)));
@@ -146,8 +148,8 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     setupRangeTest(db);
 
     List<KeyValue> results = db.run(tx -> tx.getRange(
-        new KeySelector("hello".getBytes(StandardCharsets.UTF_8), false, 1),
-        new KeySelector("hello3".getBytes(StandardCharsets.UTF_8), false, 1), 3, true, StreamingMode.ITERATOR).
+            new KeySelector("hello".getBytes(StandardCharsets.UTF_8), false, 1),
+            new KeySelector("hello3".getBytes(StandardCharsets.UTF_8), false, 1), 3, true, StreamingMode.ITERATOR).
         asList().join());
     assertEquals(3, results.size());
     assertTrue(results.contains(new KeyValue(HELLO_B, WORLD_B)));
@@ -160,8 +162,8 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     setupRangeTest(db);
 
     List<KeyValue> results = db.run(tx -> tx.getRange(
-        new KeySelector("hello".getBytes(StandardCharsets.UTF_8), false, 1),
-        new KeySelector("hello3".getBytes(StandardCharsets.UTF_8), false, 1), 3, true, StreamingMode.EXACT).
+            new KeySelector("hello".getBytes(StandardCharsets.UTF_8), false, 1),
+            new KeySelector("hello3".getBytes(StandardCharsets.UTF_8), false, 1), 3, true, StreamingMode.EXACT).
         asList().join());
     assertEquals(3, results.size());
     assertTrue(results.contains(new KeyValue(HELLO_B, WORLD_B)));
@@ -720,5 +722,21 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     String[] join = db.runAsync(tx -> RemoteLocalityUtil.
         getAddressesForKey(tx, "hello".getBytes(StandardCharsets.UTF_8))).join();
     assertTrue(join.length > 0);
+  }
+
+  @Test
+  public void testGetMetadataVersion() {
+    byte[] vs = db.run(tx -> {
+      tx.mutate(MutationType.SET_VERSIONSTAMPED_VALUE, METADATA_VERSION_KEY,
+          new byte[14]);
+      return tx.getVersionstamp();
+    }).join();
+    byte[] cf = db.runAsync(tx -> tx.getReadVersion().
+        thenCompose(x -> ((RemoteTransaction) tx).getReadVersionResponse).
+        thenCompose(grv -> {
+          assertTrue(grv.hasMetadataVersion());
+          return tx.get(METADATA_VERSION_KEY);
+        })).join();
+    assertArrayEquals(vs, cf, () -> printable(vs) + " != " + printable(cf));
   }
 }
