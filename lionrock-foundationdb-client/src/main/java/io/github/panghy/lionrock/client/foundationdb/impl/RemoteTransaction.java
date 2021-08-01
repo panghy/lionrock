@@ -623,6 +623,9 @@ public class RemoteTransaction implements TransactionMixin {
       if (!getReadVersionSent.get()) {
         getReadVersion();
       }
+      if (!snapshot) {
+        addReadConflictKey(key);
+      }
       return getReadVersionResponse.thenApply(x -> x.getMetadataVersion().toByteArray());
     }
     assertTransactionState();
