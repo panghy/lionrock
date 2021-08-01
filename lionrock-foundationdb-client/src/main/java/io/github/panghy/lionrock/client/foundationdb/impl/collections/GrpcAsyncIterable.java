@@ -25,17 +25,20 @@ public class GrpcAsyncIterable<T, Resp> implements AsyncIterable<T> {
   private final GrpcAsyncIterator.RemovalCallback<T> removalCallback;
   private final Function<Resp, Stream<T>> respToStreamFunction;
   private final Function<Resp, Boolean> isDoneFunction;
+  private Function<String, CompletableFuture<Boolean>> completableFutureSupplier;
   private final FetchIssuer<Resp> fetchIssuer;
   private final Executor executorService;
 
   public GrpcAsyncIterable(GrpcAsyncIterator.RemovalCallback<T> removalCallback,
                            Function<Resp, Stream<T>> respToStreamFunction,
                            Function<Resp, Boolean> isDoneFunction,
+                           Function<String, CompletableFuture<Boolean>> completableFutureSupplier,
                            FetchIssuer<Resp> fetchIssuer,
                            Executor executorService) {
     this.removalCallback = removalCallback;
     this.respToStreamFunction = respToStreamFunction;
     this.isDoneFunction = isDoneFunction;
+    this.completableFutureSupplier = completableFutureSupplier;
     this.fetchIssuer = fetchIssuer;
     this.executorService = executorService;
   }
@@ -43,7 +46,7 @@ public class GrpcAsyncIterable<T, Resp> implements AsyncIterable<T> {
   @Override
   public AsyncIterator<T> iterator() {
     GrpcAsyncIterator<T, Resp> grpcAsyncIterator = new GrpcAsyncIterator<>(
-        removalCallback, respToStreamFunction, isDoneFunction, executorService);
+        removalCallback, respToStreamFunction, completableFutureSupplier, isDoneFunction, executorService);
     this.fetchIssuer.issue(grpcAsyncIterator::accept, grpcAsyncIterator::accept);
     return grpcAsyncIterator;
   }

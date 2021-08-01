@@ -4,6 +4,7 @@ import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.async.AsyncIterator;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
+import io.github.panghy.lionrock.client.foundationdb.impl.NamedCompletableFuture;
 import io.github.panghy.lionrock.proto.GetRangeResponse;
 import io.github.panghy.lionrock.proto.OperationFailureResponse;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ class GrpcAsyncIterableTest {
     GrpcAsyncIterable<KeyValue, GetRangeResponse> iterable = new GrpcAsyncIterable<>(
         removalCallback, resp -> resp.getKeyValuesList().stream().map(x ->
         new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
-        GetRangeResponse::getDone, fetchIssuer, MoreExecutors.directExecutor());
+        GetRangeResponse::getDone, NamedCompletableFuture::new, fetchIssuer, MoreExecutors.directExecutor());
     AsyncIterator<KeyValue> iterator = iterable.iterator();
 
     verify(fetchIssuer, times(1)).issue(respCaptor.capture(), failureCaptor.capture());
@@ -113,6 +114,7 @@ class GrpcAsyncIterableTest {
         resp -> resp.getKeyValuesList().stream().map(x ->
             new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
         GetRangeResponse::getDone,
+        NamedCompletableFuture::new,
         fetchIssuer,
         MoreExecutors.directExecutor());
     CompletableFuture<List<KeyValue>> cf = iterable.asList();
@@ -154,6 +156,7 @@ class GrpcAsyncIterableTest {
         resp -> resp.getKeyValuesList().stream().map(x ->
             new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
         GetRangeResponse::getDone,
+        NamedCompletableFuture::new,
         fetchIssuer,
         MoreExecutors.directExecutor());
     AsyncIterator<KeyValue> iterator = iterable.iterator();
@@ -196,6 +199,7 @@ class GrpcAsyncIterableTest {
         resp -> resp.getKeyValuesList().stream().map(x ->
             new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
         GetRangeResponse::getDone,
+        NamedCompletableFuture::new,
         fetchIssuer,
         MoreExecutors.directExecutor());
 
