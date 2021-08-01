@@ -58,11 +58,9 @@ public class SequenceResponseDemuxer {
     } else if (resp.hasGetRange()) {
       // getRange can be called multiple times until done.
       if (resp.getGetRange().getDone()) {
-        StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetRange().getSequenceId());
-        executor.execute(() -> visitor.handleGetRange(resp.getGetRange()));
+        removeVistorOrThrow(resp.getGetRange().getSequenceId()).handleGetRange(resp.getGetRange());
       } else {
-        StreamingDatabaseResponseVisitor visitor = getVistorOrThrow(resp.getGetRange().getSequenceId());
-        executor.execute(() -> visitor.handleGetRange(resp.getGetRange()));
+        getVistorOrThrow(resp.getGetRange().getSequenceId()).handleGetRange(resp.getGetRange());
       }
     } else if (resp.hasOperationFailure()) {
       StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getOperationFailure().getSequenceId());
@@ -82,11 +80,11 @@ public class SequenceResponseDemuxer {
     } else if (resp.hasGetBoundaryKeys()) {
       // getBoundaryKeys can be called multiple times until done.
       if (resp.getGetBoundaryKeys().getDone()) {
-        StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetBoundaryKeys().getSequenceId());
-        executor.execute(() -> visitor.handleGetBoundaryKeys(resp.getGetBoundaryKeys()));
+        removeVistorOrThrow(resp.getGetBoundaryKeys().getSequenceId()).
+            handleGetBoundaryKeys(resp.getGetBoundaryKeys());
       } else {
-        StreamingDatabaseResponseVisitor visitor = getVistorOrThrow(resp.getGetBoundaryKeys().getSequenceId());
-        executor.execute(() -> visitor.handleGetBoundaryKeys(resp.getGetBoundaryKeys()));
+        getVistorOrThrow(resp.getGetBoundaryKeys().getSequenceId()).
+            handleGetBoundaryKeys(resp.getGetBoundaryKeys());
       }
     } else if (resp.hasGetAddressesForKey()) {
       StreamingDatabaseResponseVisitor visitor = removeVistorOrThrow(resp.getGetAddressesForKey().getSequenceId());

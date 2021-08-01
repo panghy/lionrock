@@ -10,6 +10,7 @@ import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -36,13 +37,15 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
 
   private final Function<Resp, Stream<T>> respToStreamFunction;
   private final Function<Resp, Boolean> isDoneFunction;
+  private final Executor executor;
 
   public GrpcAsyncIterator(RemovalCallback removalCallback,
                            Function<Resp, Stream<T>> respToStreamFunction,
-                           Function<Resp, Boolean> isDoneFunction) {
+                           Function<Resp, Boolean> isDoneFunction, Executor executor) {
     this.removalCallback = removalCallback;
     this.respToStreamFunction = respToStreamFunction;
     this.isDoneFunction = isDoneFunction;
+    this.executor = executor;
   }
 
   void accept(Resp resp) {
@@ -61,9 +64,9 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
       if (wasEmpty) {
         // waiting for key values.
         if (isDoneFunction.apply(resp) && responses.isEmpty()) {
-          onHasNextFuture.complete(false);
+          onHasNextFuture.completeAsync(() -> false, executor);
         } else if (!responses.isEmpty()) {
-          onHasNextFuture.complete(true);
+          onHasNextFuture.completeAsync(() -> true, executor);
         }
       }
     }
