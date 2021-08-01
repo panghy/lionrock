@@ -30,20 +30,24 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
   /**
    * {@link CompletableFuture} to signal when a result is available.
    */
-  private CompletableFuture<Boolean> onHasNextFuture = new CompletableFuture<>();
+  private CompletableFuture<Boolean> onHasNextFuture;
   private boolean done = false;
   private boolean cancelled = false;
   private T prev = null;
 
   private final Function<Resp, Stream<T>> respToStreamFunction;
+  private Function<String, CompletableFuture<Boolean>> completableFutureSupplier;
   private final Function<Resp, Boolean> isDoneFunction;
   private final Executor executor;
 
   public GrpcAsyncIterator(RemovalCallback removalCallback,
                            Function<Resp, Stream<T>> respToStreamFunction,
+                           Function<String, CompletableFuture<Boolean>> completableFutureSupplier,
                            Function<Resp, Boolean> isDoneFunction, Executor executor) {
     this.removalCallback = removalCallback;
     this.respToStreamFunction = respToStreamFunction;
+    this.completableFutureSupplier = completableFutureSupplier;
+    this.onHasNextFuture = completableFutureSupplier.apply("GrpcAsyncIterator.onHasNext()");
     this.isDoneFunction = isDoneFunction;
     this.executor = executor;
   }
@@ -102,7 +106,7 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
           (onHasNextFuture == null ||
               (onHasNextFuture.isDone() &&
                   !onHasNextFuture.isCompletedExceptionally()))) {
-        onHasNextFuture = new CompletableFuture<>();
+        onHasNextFuture = completableFutureSupplier.apply("GrpcAsyncIterator.onHasNext()");
       }
     }
     return onHasNextFuture;
