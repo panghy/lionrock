@@ -396,9 +396,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
             }
             CloseableAsyncIterator<byte[]> boundaryKeys = LocalityUtil.getBoundaryKeys(tx, startB, endB);
             return AsyncUtil.collectRemaining(boundaryKeys).
-                whenComplete((bytes, throwable) -> {
-                  boundaryKeys.close();
-                });
+                whenComplete((bytes, throwable) -> boundaryKeys.close());
           }),
           overallSpan, responseObserver, "failed to get boundary keys").thenAccept(results -> {
         try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
@@ -689,44 +687,16 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           });
         } else if (value.hasSetValue()) {
           hasActiveTransactionOrThrow();
-          if (logger.isDebugEnabled()) {
-            String msg = "SetValueRequest for: " +
-                printable(value.getSetValue().getKey().toByteArray()) + " => " +
-                printable(value.getSetValue().getValue().toByteArray());
-            logger.debug(msg);
-            if (overallSpan != null) {
-              overallSpan.event(msg);
-            }
-          }
-          rowsWritten.incrementAndGet();
-          tx.set(value.getSetValue().getKey().toByteArray(),
-              value.getSetValue().getValue().toByteArray());
+          SetValueRequest req = value.getSetValue();
+          setValue(req);
         } else if (value.hasClearKey()) {
           hasActiveTransactionOrThrow();
-          if (logger.isDebugEnabled()) {
-            String msg = "ClearKeyRequest for: " +
-                printable(value.getClearKey().getKey().toByteArray());
-            logger.debug(msg);
-            if (overallSpan != null) {
-              overallSpan.event(msg);
-            }
-          }
-          clears.incrementAndGet();
-          tx.clear(value.getClearKey().getKey().toByteArray());
+          ClearKeyRequest req = value.getClearKey();
+          clearKey(req);
         } else if (value.hasClearRange()) {
           hasActiveTransactionOrThrow();
-          if (logger.isDebugEnabled()) {
-            String msg = "ClearKeyRangeRequest for: " +
-                printable(value.getClearRange().getStart().toByteArray()) + " => " +
-                printable(value.getClearRange().getEnd().toByteArray());
-            logger.debug(msg);
-            if (overallSpan != null) {
-              overallSpan.event(msg);
-            }
-          }
-          clears.incrementAndGet();
-          tx.clear(value.getClearRange().getStart().toByteArray(),
-              value.getClearRange().getEnd().toByteArray());
+          ClearKeyRangeRequest req = value.getClearRange();
+          clearRange(req);
         } else if (value.hasGetRange()) {
           hasActiveTransactionOrThrow();
           GetRangeRequest req = value.getGetRange();
@@ -779,42 +749,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
         } else if (value.hasAddConflictKey()) {
           hasActiveTransactionOrThrow();
-          if (logger.isDebugEnabled()) {
-            String msg = "AddConflictKeyRequest for: " + printable(value.getAddConflictKey().getKey().toByteArray()) +
-                " write: " + value.getAddConflictKey().getWrite();
-            logger.debug(msg);
-            if (overallSpan != null) {
-              overallSpan.event(msg);
-            }
-          }
-          if (value.getAddConflictKey().getWrite()) {
-            writeConflictAdds.incrementAndGet();
-            tx.addWriteConflictKey(value.getAddConflictKey().getKey().toByteArray());
-          } else {
-            readConflictAdds.incrementAndGet();
-            tx.addReadConflictKey(value.getAddConflictKey().getKey().toByteArray());
-          }
+          AddConflictKeyRequest req = value.getAddConflictKey();
+          addConflictKey(req);
         } else if (value.hasAddConflictRange()) {
           hasActiveTransactionOrThrow();
-          if (logger.isDebugEnabled()) {
-            String msg = "AddConflictRangeRequest from: " +
-                printable(value.getAddConflictRange().getStart().toByteArray()) + " to: " +
-                printable(value.getAddConflictRange().getEnd().toByteArray()) +
-                " write: " + value.getAddConflictRange().getWrite();
-            logger.debug(msg);
-            if (overallSpan != null) {
-              overallSpan.event(msg);
-            }
-          }
-          if (value.getAddConflictRange().getWrite()) {
-            writeConflictAdds.incrementAndGet();
-            tx.addWriteConflictRange(value.getAddConflictRange().getStart().toByteArray(),
-                value.getAddConflictRange().getEnd().toByteArray());
-          } else {
-            readConflictAdds.incrementAndGet();
-            tx.addReadConflictRange(value.getAddConflictRange().getStart().toByteArray(),
-                value.getAddConflictRange().getEnd().toByteArray());
-          }
+          AddConflictRangeRequest req = value.getAddConflictRange();
+          addConflictRange(req);
         } else if (value.hasGetReadVersion()) {
           hasActiveTransactionOrThrow();
           GetReadVersionRequest req = value.getGetReadVersion();
@@ -885,20 +825,8 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           }
         } else if (value.hasMutateValue()) {
           hasActiveTransactionOrThrow();
-          if (logger.isDebugEnabled()) {
-            String msg = "MutateValueRequest for: " +
-                printable(value.getMutateValue().getKey().toByteArray()) + " => " +
-                printable(value.getMutateValue().getParam().toByteArray()) + " with: " +
-                value.getMutateValue().getType();
-            logger.debug(msg);
-            if (overallSpan != null) {
-              overallSpan.event(msg);
-            }
-          }
-          rowsMutated.incrementAndGet();
-          tx.mutate(getMutationType(value.getMutateValue().getType()),
-              value.getMutateValue().getKey().toByteArray(),
-              value.getMutateValue().getParam().toByteArray());
+          MutateValueRequest req = value.getMutateValue();
+          mutateValue(req);
         } else if (value.hasWatchKey()) {
           hasActiveTransactionOrThrow();
           WatchKeyRequest req = value.getWatchKey();
@@ -1182,7 +1110,112 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
               opSpan.end();
             }
           });
+        } else if (value.hasBatchedMutations()) {
+          hasActiveTransactionOrThrow();
+          List<BatchedMutations> mutations = value.getBatchedMutations().getMutationsList();
+          mutations.forEach(mutation -> {
+            if (mutation.hasSetValue()) {
+              setValue(mutation.getSetValue());
+            } else if (mutation.hasMutateValue()) {
+              mutateValue(mutation.getMutateValue());
+            } else if (mutation.hasClearKey()) {
+              clearKey(mutation.getClearKey());
+            } else if (mutation.hasClearRange()) {
+              clearRange(mutation.getClearRange());
+            } else if (mutation.hasAddConflictKey()) {
+              addConflictKey(mutation.getAddConflictKey());
+            } else if (mutation.hasAddConflictRange()) {
+              addConflictRange(mutation.getAddConflictRange());
+            }
+          });
         }
+      }
+
+      private void setValue(SetValueRequest req) {
+        if (logger.isDebugEnabled()) {
+          String msg = "SetValueRequest for: " + printable(req.getKey().toByteArray()) + " => " +
+              printable(req.getValue().toByteArray());
+          logger.debug(msg);
+          if (overallSpan != null) {
+            overallSpan.event(msg);
+          }
+        }
+        rowsWritten.incrementAndGet();
+        tx.set(req.getKey().toByteArray(), req.getValue().toByteArray());
+      }
+
+      private void clearKey(ClearKeyRequest req) {
+        if (logger.isDebugEnabled()) {
+          String msg = "ClearKeyRequest for: " + printable(req.getKey().toByteArray());
+          logger.debug(msg);
+          if (overallSpan != null) {
+            overallSpan.event(msg);
+          }
+        }
+        clears.incrementAndGet();
+        tx.clear(req.getKey().toByteArray());
+      }
+
+      private void clearRange(ClearKeyRangeRequest req) {
+        if (logger.isDebugEnabled()) {
+          String msg = "ClearKeyRangeRequest for: " +
+              printable(req.getStart().toByteArray()) + " => " + printable(req.getEnd().toByteArray());
+          logger.debug(msg);
+          if (overallSpan != null) {
+            overallSpan.event(msg);
+          }
+        }
+        clears.incrementAndGet();
+        tx.clear(req.getStart().toByteArray(), req.getEnd().toByteArray());
+      }
+
+      private void addConflictKey(AddConflictKeyRequest req) {
+        if (logger.isDebugEnabled()) {
+          String msg = "AddConflictKeyRequest for: " + printable(req.getKey().toByteArray()) +
+              " write: " + req.getWrite();
+          logger.debug(msg);
+          if (overallSpan != null) {
+            overallSpan.event(msg);
+          }
+        }
+        if (req.getWrite()) {
+          writeConflictAdds.incrementAndGet();
+          tx.addWriteConflictKey(req.getKey().toByteArray());
+        } else {
+          readConflictAdds.incrementAndGet();
+          tx.addReadConflictKey(req.getKey().toByteArray());
+        }
+      }
+
+      private void addConflictRange(AddConflictRangeRequest req) {
+        if (logger.isDebugEnabled()) {
+          String msg = "AddConflictRangeRequest from: " + printable(req.getStart().toByteArray()) + " to: " +
+              printable(req.getEnd().toByteArray()) + " write: " + req.getWrite();
+          logger.debug(msg);
+          if (overallSpan != null) {
+            overallSpan.event(msg);
+          }
+        }
+        if (req.getWrite()) {
+          writeConflictAdds.incrementAndGet();
+          tx.addWriteConflictRange(req.getStart().toByteArray(), req.getEnd().toByteArray());
+        } else {
+          readConflictAdds.incrementAndGet();
+          tx.addReadConflictRange(req.getStart().toByteArray(), req.getEnd().toByteArray());
+        }
+      }
+
+      private void mutateValue(MutateValueRequest req) {
+        if (logger.isDebugEnabled()) {
+          String msg = "MutateValueRequest for: " + printable(req.getKey().toByteArray()) + " => " +
+              printable(req.getParam().toByteArray()) + " with: " + req.getType();
+          logger.debug(msg);
+          if (overallSpan != null) {
+            overallSpan.event(msg);
+          }
+        }
+        rowsMutated.incrementAndGet();
+        tx.mutate(getMutationType(req.getType()), req.getKey().toByteArray(), req.getParam().toByteArray());
       }
 
       /**
@@ -1479,6 +1512,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     if (throwable instanceof FDBException) {
       builder.setCode(((FDBException) throwable).getCode());
     }
+    //noinspection SynchronizationOnLocalVariableOrMethodParameter
     synchronized (responseObserver) {
       responseObserver.onNext(StreamingDatabaseResponse.newBuilder().
           setOperationFailure(builder.build()).

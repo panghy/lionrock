@@ -35,6 +35,11 @@ import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
 public class RemoteTransaction implements TransactionMixin {
 
   /**
+   * Flush mutations when we have 1MB of them.
+   */
+  public static final int MUTATIONS_FLUSH_BATCH_THRESHOLD = 1_000_000;
+
+  /**
    * Exception we set for the getVersionstamp() future when no write conflict ranges or mutations are present.
    */
   private static final FDBException NO_COMMIT_VERSION =
@@ -55,6 +60,7 @@ public class RemoteTransaction implements TransactionMixin {
   private final AtomicReference<CommitTransactionResponse> commitResponse = new AtomicReference<>();
   private final SequenceResponseDemuxer demuxer;
   private final RemoteTransactionContext remoteTransactionContext;
+  private final MutationsBatcher batcher;
   /**
    * Instance of {@link TransactionOptions} for this transaction context.
    */
@@ -194,6 +200,7 @@ public class RemoteTransaction implements TransactionMixin {
     }
     this.remoteTransactionContext = remoteTransactionContext;
     this.demuxer = new SequenceResponseDemuxer();
+    this.batcher = new MutationsBatcher(requestSink, MUTATIONS_FLUSH_BATCH_THRESHOLD);
   }
 
   private class RemoteReadTransaction implements ReadTransactionMixin {
@@ -270,68 +277,52 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void addReadConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setAddConflictRange(
-          AddConflictRangeRequest.newBuilder().
-              setStart(ByteString.copyFrom(keyBegin)).
-              setEnd(ByteString.copyFrom(keyEnd)).
-              setWrite(false).
-              build()).build());
-    }
+    batcher.addConflictRange(
+        AddConflictRangeRequest.newBuilder().
+            setStart(ByteString.copyFrom(keyBegin)).
+            setEnd(ByteString.copyFrom(keyEnd)).
+            setWrite(false).
+            build());
   }
 
   @Override
   public void addWriteConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
     readOnlyTx.set(false);
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setAddConflictRange(
-          AddConflictRangeRequest.newBuilder().
-              setStart(ByteString.copyFrom(keyBegin)).
-              setEnd(ByteString.copyFrom(keyEnd)).
-              setWrite(true).
-              build()).build());
-    }
+    batcher.addConflictRange(
+        AddConflictRangeRequest.newBuilder().
+            setStart(ByteString.copyFrom(keyBegin)).
+            setEnd(ByteString.copyFrom(keyEnd)).
+            setWrite(true).
+            build());
   }
 
   @Override
   public void set(byte[] key, byte[] value) {
     assertTransactionState();
     readOnlyTx.set(false);
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetValue(
-              SetValueRequest.newBuilder().
-                  setKey(ByteString.copyFrom(key)).
-                  setValue(ByteString.copyFrom(value)).build()).
-          build());
-    }
+    batcher.addSetValue(SetValueRequest.newBuilder().
+        setKey(ByteString.copyFrom(key)).
+        setValue(ByteString.copyFrom(value)).build());
   }
 
   @Override
   public void clear(byte[] key) {
     assertTransactionState();
     readOnlyTx.set(false);
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearKey(
-              ClearKeyRequest.newBuilder().
-                  setKey(ByteString.copyFrom(key)).
-                  build()).
-          build());
-    }
+    batcher.addClearKey(ClearKeyRequest.newBuilder().
+        setKey(ByteString.copyFrom(key)).
+        build());
   }
 
   @Override
   public void clear(byte[] beginKey, byte[] endKey) {
     assertTransactionState();
     readOnlyTx.set(false);
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setClearRange(
-              ClearKeyRangeRequest.newBuilder().
-                  setStart(ByteString.copyFrom(beginKey)).
-                  setEnd(ByteString.copyFrom(endKey)).
-                  build()).
-          build());
-    }
+    batcher.addClearRange(ClearKeyRangeRequest.newBuilder().
+        setStart(ByteString.copyFrom(beginKey)).
+        setEnd(ByteString.copyFrom(endKey)).
+        build());
   }
 
   @Override
@@ -383,15 +374,12 @@ public class RemoteTransaction implements TransactionMixin {
       default:
         throw new IllegalArgumentException("unsupported MutationType: " + optype);
     }
-    synchronized (requestSink) {
-      requestSink.onNext(StreamingDatabaseRequest.newBuilder().setMutateValue(
-              MutateValueRequest.newBuilder().
-                  setKey(ByteString.copyFrom(key)).
-                  setParam(ByteString.copyFrom(param)).
-                  setType(mutationType).
-                  build()).
-          build());
-    }
+    batcher.addMutateValue(
+        MutateValueRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            setParam(ByteString.copyFrom(param)).
+            setType(mutationType).
+            build());
   }
 
   @Override
@@ -405,6 +393,7 @@ public class RemoteTransaction implements TransactionMixin {
       close();
       commitFuture.complete(null);
     } else {
+      batcher.flush(true);
       synchronized (requestSink) {
         requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
                 CommitTransactionRequest.newBuilder().build()).
@@ -441,6 +430,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Long> getApproximateSize() {
     assertTransactionState();
+    batcher.flush(true);
     CompletableFuture<Long> toReturn = newCompletableFuture("getApproximateSize");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
@@ -523,6 +513,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Void> watch(byte[] key) throws FDBException {
     assertTransactionState();
+    batcher.flush(true);
     CompletableFuture<Void> toReturn = newCompletableFuture("watch");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
@@ -602,6 +593,7 @@ public class RemoteTransaction implements TransactionMixin {
 
   private CompletableFuture<byte[]> get(byte[] key, boolean snapshot) {
     assertTransactionState();
+    batcher.flush(true);
     CompletableFuture<byte[]> toReturn = newCompletableFuture("get: " + printable(key));
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
@@ -628,6 +620,7 @@ public class RemoteTransaction implements TransactionMixin {
 
   private CompletableFuture<byte[]> getKey(KeySelector selector, boolean snapshot) {
     assertTransactionState();
+    batcher.flush(true);
     CompletableFuture<byte[]> toReturn = newCompletableFuture("getKey");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
@@ -654,6 +647,8 @@ public class RemoteTransaction implements TransactionMixin {
 
   private AsyncIterable<KeyValue> getRange(KeySelector begin, KeySelector end, int limit, boolean reverse,
                                            StreamingMode mode, boolean snapshot) {
+    assertTransactionState();
+    batcher.flush(true);
     io.github.panghy.lionrock.proto.StreamingMode streamingMode =
         io.github.panghy.lionrock.proto.StreamingMode.ITERATOR;
     switch (mode) {
