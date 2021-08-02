@@ -69,7 +69,6 @@ public class RemoteTransaction implements TransactionMixin {
   private final TransactionOptions transactionOptions = new TransactionOptions(new OptionConsumer() {
     @Override
     public void setOption(int code, byte[] parameter) {
-      assertTransactionState();
       if (code == 500) {
         // timeout.
         long timeoutMs = ByteBuffer.wrap(parameter).order(ByteOrder.LITTLE_ENDIAN).getLong();
@@ -279,8 +278,26 @@ public class RemoteTransaction implements TransactionMixin {
   }
 
   @Override
+  public void addReadConflictKey(byte[] key) {
+    conflictRangeBatcher.addConflictKey(
+        AddConflictKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            setWrite(false).
+            build());
+  }
+
+  @Override
+  public void addWriteConflictKey(byte[] key) {
+    readOnlyTx.set(false);
+    conflictRangeBatcher.addConflictKey(
+        AddConflictKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            setWrite(true).
+            build());
+  }
+
+  @Override
   public void addReadConflictRange(byte[] keyBegin, byte[] keyEnd) {
-    assertTransactionState();
     conflictRangeBatcher.addConflictRange(
         AddConflictRangeRequest.newBuilder().
             setStart(ByteString.copyFrom(keyBegin)).
@@ -291,7 +308,6 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void addWriteConflictRange(byte[] keyBegin, byte[] keyEnd) {
-    assertTransactionState();
     readOnlyTx.set(false);
     conflictRangeBatcher.addConflictRange(
         AddConflictRangeRequest.newBuilder().
@@ -303,7 +319,6 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void set(byte[] key, byte[] value) {
-    assertTransactionState();
     readOnlyTx.set(false);
     batcher.addSetValue(SetValueRequest.newBuilder().
         setKey(ByteString.copyFrom(key)).
@@ -312,7 +327,6 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void clear(byte[] key) {
-    assertTransactionState();
     readOnlyTx.set(false);
     batcher.addClearKey(ClearKeyRequest.newBuilder().
         setKey(ByteString.copyFrom(key)).
@@ -321,7 +335,6 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void clear(byte[] beginKey, byte[] endKey) {
-    assertTransactionState();
     readOnlyTx.set(false);
     batcher.addClearRange(ClearKeyRangeRequest.newBuilder().
         setStart(ByteString.copyFrom(beginKey)).
@@ -331,7 +344,6 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void mutate(MutationType optype, byte[] key, byte[] param) {
-    assertTransactionState();
     readOnlyTx.set(false);
     io.github.panghy.lionrock.proto.MutationType mutationType;
     switch (optype) {
@@ -427,7 +439,10 @@ public class RemoteTransaction implements TransactionMixin {
     return versionStampFuture;
   }
 
-  private <T> NamedCompletableFuture<T> newCompletableFuture(String name) {
+  private <T> CompletableFuture<T> newCompletableFuture(String name) {
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     NamedCompletableFuture<T> toReturn = new NamedCompletableFuture<>(name);
     synchronized (futures) {
       futures.add(toReturn);
@@ -437,7 +452,9 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public CompletableFuture<Long> getApproximateSize() {
-    assertTransactionState();
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     batcher.flush(true);
     conflictRangeBatcher.flush(true);
     CompletableFuture<Long> toReturn = newCompletableFuture("getApproximateSize");
@@ -515,13 +532,14 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void cancel() {
-    assertTransactionState();
     cancelled.set(true);
   }
 
   @Override
   public CompletableFuture<Void> watch(byte[] key) throws FDBException {
-    assertTransactionState();
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     batcher.flush(true);
     CompletableFuture<Void> toReturn = newCompletableFuture("watch");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
@@ -567,7 +585,9 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public CompletableFuture<Long> getReadVersion() {
-    assertTransactionState();
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     CompletableFuture<Long> toReturn = newCompletableFuture("getReadVersion");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
@@ -587,7 +607,6 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public void setReadVersion(long version) {
-    assertTransactionState();
     // this is done to simulate native client behavior, simply setting a read version will require us to commit since
     // setting to a past_version will throw on the commit.
     readOnlyTx.set(false);
@@ -604,7 +623,9 @@ public class RemoteTransaction implements TransactionMixin {
   }
 
   private CompletableFuture<byte[]> get(byte[] key, boolean snapshot) {
-    assertTransactionState();
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     batcher.flush(true);
     CompletableFuture<byte[]> toReturn = newCompletableFuture("get: " + printable(key));
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
@@ -631,7 +652,9 @@ public class RemoteTransaction implements TransactionMixin {
   }
 
   private CompletableFuture<byte[]> getKey(KeySelector selector, boolean snapshot) {
-    assertTransactionState();
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     batcher.flush(true);
     CompletableFuture<byte[]> toReturn = newCompletableFuture("getKey");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
@@ -659,7 +682,6 @@ public class RemoteTransaction implements TransactionMixin {
 
   private AsyncIterable<KeyValue> getRange(KeySelector begin, KeySelector end, int limit, boolean reverse,
                                            StreamingMode mode, boolean snapshot) {
-    assertTransactionState();
     batcher.flush(true);
     io.github.panghy.lionrock.proto.StreamingMode streamingMode =
         io.github.panghy.lionrock.proto.StreamingMode.ITERATOR;
@@ -686,7 +708,6 @@ public class RemoteTransaction implements TransactionMixin {
         this::newCompletableFuture,
         // fetch issuer
         (responseConsumer, failureConsumer) -> {
-          assertTransactionState();
           long curr = demuxer.addHandler(new StreamingDatabaseResponseVisitorStub() {
             @Override
             public void handleGetRange(GetRangeResponse resp) {
@@ -717,7 +738,9 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public CompletableFuture<Long> getEstimatedRangeSizeBytes(byte[] begin, byte[] end) {
-    assertTransactionState();
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     CompletableFuture<Long> toReturn = newCompletableFuture("getEstimatedRangeSizeBytes");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
       @Override
@@ -773,7 +796,6 @@ public class RemoteTransaction implements TransactionMixin {
         this::newCompletableFuture,
         // fetch issuer.
         (responseConsumer, failureConsumer) -> {
-          assertTransactionState();
           long curr = demuxer.addHandler(new StreamingDatabaseResponseVisitorStub() {
             @Override
             public void handleGetBoundaryKeys(GetBoundaryKeysResponse resp) {
@@ -805,7 +827,9 @@ public class RemoteTransaction implements TransactionMixin {
    * @return Storage server addresses. Implementation specific.
    */
   public CompletableFuture<String[]> getAddressesForKey(byte[] key) {
-    assertTransactionState();
+    if (shouldFail()) {
+      return getFailedFuture();
+    }
     CompletableFuture<String[]> toReturn = newCompletableFuture("getAddressesForKey");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
@@ -894,18 +918,24 @@ public class RemoteTransaction implements TransactionMixin {
   }
 
   /**
+   * @return whether {@link #getFailedFuture()} would produce a failed future.
+   */
+  private boolean shouldFail() {
+    return commitStarted.get() || completed.get() || cancelled.get() || remoteError != null;
+  }
+
+  /**
    * Assert that the user can interact with this {@link RemoteTransaction}.
    */
-  private void assertTransactionState() {
+  private <T> CompletableFuture<T> getFailedFuture() {
     if (commitStarted.get() || completed.get()) {
-      throw new FDBException("Operation issued while a commit was outstanding", 2017);
+      return failedFuture(new FDBException("Operation issued while a commit was outstanding", 2017));
+    } else if (cancelled.get()) {
+      return failedFuture(new FDBException("Operation aborted because the transaction was cancelled", 1025));
+    } else if (remoteError != null) {
+      return failedFuture(new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100));
     }
-    if (cancelled.get()) {
-      throw new FDBException("Operation aborted because the transaction was cancelled", 1025);
-    }
-    if (remoteError != null) {
-      throw new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100);
-    }
+    throw new IllegalStateException("transaction is still active");
   }
 
   /**

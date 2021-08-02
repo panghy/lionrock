@@ -74,6 +74,7 @@ public class MutationsBatcher {
             setBatchedMutations(batchedMutationsRequest).build());
       }
       batchedMutationsRequest.clear();
+      size.set(0);
     }
   }
 }
