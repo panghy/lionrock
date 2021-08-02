@@ -121,7 +121,8 @@ public class RemoteTransaction implements TransactionMixin {
   private volatile Throwable remoteError;
 
   public RemoteTransaction(RemoteTransactionContext remoteTransactionContext, long timeoutMs) {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub = remoteTransactionContext.getStub();
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        remoteTransactionContext.getStub().withExecutor(remoteTransactionContext.getExecutor());
     if (timeoutMs > 0) {
       stub = stub.withDeadlineAfter(timeoutMs, TimeUnit.MILLISECONDS);
     }
