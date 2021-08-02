@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
@@ -67,7 +66,6 @@ public class RemoteTransaction implements TransactionMixin {
   private final SequenceResponseDemuxer demuxer;
   private final RemoteTransactionContext remoteTransactionContext;
   private final MutationsBatcher batcher;
-  private final AtomicLong setReadVersion = new AtomicLong(-1);
   /**
    * Instance of {@link TransactionOptions} for this transaction context.
    */
@@ -590,13 +588,9 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void setReadVersion(long version) {
     assertTransactionState();
-    // this is done to simulate native client behavior, if we set the read version more than once
-    // to a different value, we mark the transaction is non-read-only, which causes a real commit
-    // thus returning an error.
-    long orig = setReadVersion.getAndSet(version);
-    if (orig != -1 && orig != version) {
-      readOnlyTx.set(false);
-    }
+    // this is done to simulate native client behavior, simply setting a read version will require us to commit since
+    // setting to a past_version will throw on the commit.
+    readOnlyTx.set(false);
     synchronized (requestSink) {
       requestSink.onNext(StreamingDatabaseRequest.newBuilder().setSetReadVersion(
               SetReadVersionRequest.newBuilder().setReadVersion(version).build()).
