@@ -158,6 +158,12 @@ public class RemoteTransaction implements TransactionMixin {
           }
           commitFuture.completeExceptionally(unwrapped);
           remoteError = unwrapped;
+          synchronized (requestSink) {
+            try {
+              requestSink.onError(t);
+            } catch (RuntimeException ignored) {
+            }
+          }
         }
 
         @Override
