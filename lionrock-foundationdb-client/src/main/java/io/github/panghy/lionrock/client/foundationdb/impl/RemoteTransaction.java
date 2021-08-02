@@ -279,6 +279,26 @@ public class RemoteTransaction implements TransactionMixin {
   }
 
   @Override
+  public void addReadConflictKey(byte[] key) {
+    assertTransactionState();
+    conflictRangeBatcher.addConflictKey(
+        AddConflictKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            setWrite(false).
+            build());
+  }
+
+  @Override
+  public void addWriteConflictKey(byte[] key) {
+    assertTransactionState();
+    conflictRangeBatcher.addConflictKey(
+        AddConflictKeyRequest.newBuilder().
+            setKey(ByteString.copyFrom(key)).
+            setWrite(true).
+            build());
+  }
+
+  @Override
   public void addReadConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
     conflictRangeBatcher.addConflictRange(
