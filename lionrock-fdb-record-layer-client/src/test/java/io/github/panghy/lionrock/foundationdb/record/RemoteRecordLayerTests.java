@@ -214,6 +214,31 @@ public class RemoteRecordLayerTests extends AbstractGrpcTest {
   }
 
   @Test
+  public void testRichIndex_allCustomersWithEmailAddressBeginningWithJohn() {
+    Map<String, List<String>> addresses = fdb.run((FDBRecordContext cx) -> {
+      FDBRecordStore store = recordStoreBuilder.copyBuilder().setContext(cx).open();
+      RecordQuery query = RecordQuery.newBuilder()
+          .setRecordType("Customer")
+          .setFilter(Query.field("email_address").oneOfThem().startsWith("john"))
+          .build();
+      Map<String, List<String>> addressMap = new HashMap<>();
+      try (RecordCursor<FDBQueriedRecord<Message>> cursor = store.executeQuery(query)) {
+        cursor.forEach((FDBQueriedRecord<Message> record) -> {
+          SampleProto.Customer.Builder builder = SampleProto.Customer.newBuilder().mergeFrom(record.getRecord());
+          addressMap.put(builder.getFirstName() + " " + builder.getLastName(),
+              builder.getEmailAddressList());
+        }).join();
+      }
+      return addressMap;
+    });
+    assertEquals(1, addresses.size());
+    assertTrue(addresses.containsKey("John Smith"));
+    assertEquals(2, addresses.get("John Smith").size());
+    assertTrue(addresses.get("John Smith").contains("jsmith@example.com"));
+    assertTrue(addresses.get("John Smith").contains("john_smith@example.com"));
+  }
+
+  @Test
   public void testRichIndex_allCustomersWithPreferenceTagsBooksAndMovies() {
     List<String> names = fdb.run((FDBRecordContext cx) -> {
       RecordQuery query = RecordQuery.newBuilder()
@@ -314,7 +339,7 @@ public class RemoteRecordLayerTests extends AbstractGrpcTest {
         new DirectoryLayerDirectory("application")
             .addSubdirectory(new KeySpaceDirectory("environment", KeySpaceDirectory.KeyType.STRING)));
     this.path = keySpace.path("application", "record-layer-sample").add("environment", "demo");
-    this.fdb.runAsync(path::deleteAllDataAsync);
+    this.fdb.runAsync(path::deleteAllDataAsync).join();
 
     RecordMetaDataBuilder rmdBuilder = RecordMetaData.newBuilder().setRecords(SampleProto.getDescriptor());
     rmdBuilder.getRecordType("Customer").setPrimaryKey(
