@@ -45,10 +45,6 @@ public class RemoteTransaction implements TransactionMixin {
    */
   private static final FDBException NO_COMMIT_VERSION =
       new FDBException("Transaction is read-only and therefore does not have a commit version", 2021);
-  private static final FDBException USED_DURING_COMMIT =
-      new FDBException("Operation issued while a commit was outstanding", 2017);
-  private static final FDBException TRANSACTION_CANCELLED =
-      new FDBException("Operation aborted because the transaction was cancelled", 1025);
 
   private static final Metadata.Key<String> FDB_ERROR_CODE_KEY =
       Metadata.Key.of("fdb_error_code", Metadata.ASCII_STRING_MARSHALLER);
@@ -393,9 +389,9 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Void> commit() {
     if (commitStarted.getAndSet(true) || completed.get()) {
-      return failedFuture(USED_DURING_COMMIT);
+      return failedFuture(new FDBException("Operation issued while a commit was outstanding", 2017));
     } else if (cancelled.get()) {
-      return failedFuture(TRANSACTION_CANCELLED);
+      return failedFuture(new FDBException("Operation aborted because the transaction was cancelled", 1025));
     } else if (remoteError != null) {
       return failedFuture(new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100));
     }
@@ -902,10 +898,10 @@ public class RemoteTransaction implements TransactionMixin {
    */
   private void assertTransactionState() {
     if (commitStarted.get() || completed.get()) {
-      throw USED_DURING_COMMIT;
+      throw new FDBException("Operation issued while a commit was outstanding", 2017);
     }
     if (cancelled.get()) {
-      throw TRANSACTION_CANCELLED;
+      throw new FDBException("Operation aborted because the transaction was cancelled", 1025);
     }
     if (remoteError != null) {
       throw new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100);
