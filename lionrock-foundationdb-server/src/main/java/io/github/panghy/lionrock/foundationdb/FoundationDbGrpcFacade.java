@@ -498,6 +498,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                   asRuntimeException();
               synchronized (responseObserver) {
                 responseObserver.onError(toThrow);
+                if (tx != null) {
+                  tx.close();
+                }
               }
               throw toThrow;
             }
@@ -518,6 +521,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                 asRuntimeException();
             synchronized (responseObserver) {
               responseObserver.onError(toThrow);
+              if (tx != null) {
+                tx.close();
+              }
             }
             throw toThrow;
           }
@@ -571,19 +577,24 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
                       opSpan.event(msg);
                       logger.debug(msg);
                     }
+                    // terminate the connection to the client when all long living futures are done.
+                    CompletableFuture.allOf(longLivingFutures.toArray(CompletableFuture[]::new)).
+                        whenComplete((val, y) -> {
+                          logger.debug("server onCompleted()");
+                          synchronized (responseObserver) {
+                            responseObserver.onCompleted();
+                          }
+                          if (tx != null) {
+                            tx.close();
+                          }
+                        });
+                  } else {
+                    // throwable != null
+                    populateOverallSpanStats();
+                    if (tx != null) {
+                      tx.close();
+                    }
                   }
-                  // terminate the connection to the client when all long living futures are done.
-                  CompletableFuture.allOf(longLivingFutures.toArray(CompletableFuture[]::new)).
-                      whenComplete((val, y) -> {
-                        logger.debug("server onCompleted()");
-                        synchronized (responseObserver) {
-                          responseObserver.onCompleted();
-                        }
-                        populateOverallSpanStats();
-                        if (tx != null) {
-                          tx.close();
-                        }
-                      });
                 }
                 opScope.close();
                 opSpan.end();
@@ -1452,6 +1463,9 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           onError(Status.INVALID_ARGUMENT.
               withDescription("sequenceId: " + sequenceId + " has been seen before in this transaction").
               asRuntimeException());
+          if (tx != null) {
+            tx.close();
+          }
         }
       }
 
@@ -1612,23 +1626,17 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     return exceptionMetadata;
   }
 
-  private <T> CompletableFuture<T> handleException(CompletableFuture<T> input, Span overallSpan,
-                                                   StreamObserver<?> responseObserver,
-                                                   String failureMessage) {
-    return handleException(input, overallSpan, responseObserver, () -> failureMessage);
-  }
-
   /**
    * Handle exceptional cases for a {@link CompletableFuture} and emit an error to the {@link StreamObserver} as well
    * as recording a span.
    */
   private <T> CompletableFuture<T> handleException(CompletableFuture<T> input, Span overallSpan,
                                                    StreamObserver<?> responseObserver,
-                                                   Supplier<String> failureMessage) {
+                                                   String failureMessage) {
     input.whenComplete((t, throwable) -> {
       if (throwable != null) {
         try (Tracer.SpanInScope ignored = tracer.withSpan(overallSpan)) {
-          Metadata exceptionMetadata = handleThrowable(overallSpan, throwable, failureMessage);
+          Metadata exceptionMetadata = handleThrowable(overallSpan, throwable, () -> failureMessage);
           synchronized (responseObserver) {
             responseObserver.onError(Status.ABORTED.
                 withCause(throwable).
