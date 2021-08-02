@@ -154,10 +154,10 @@ public class RemoteTransaction implements TransactionMixin {
           // if the server error-ed out, fail all outstanding future.
           Throwable unwrapped = unwrapFdbException(t);
           synchronized (futures) {
+            remoteError = unwrapped;
             futures.forEach(x -> x.completeExceptionally(unwrapped));
           }
           commitFuture.completeExceptionally(unwrapped);
-          remoteError = unwrapped;
           synchronized (requestSink) {
             try {
               requestSink.onError(t);
@@ -452,6 +452,9 @@ public class RemoteTransaction implements TransactionMixin {
     NamedCompletableFuture<T> toReturn = new NamedCompletableFuture<>(name);
     synchronized (futures) {
       futures.add(toReturn);
+      if (remoteError != null) {
+        toReturn.completeExceptionally(remoteError);
+      }
     }
     return toReturn;
   }
