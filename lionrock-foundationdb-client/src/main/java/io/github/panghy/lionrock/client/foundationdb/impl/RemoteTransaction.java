@@ -389,7 +389,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<Void> commit() {
     assertTransactionState();
     if (commitStarted.getAndSet(true)) {
-      throw new IllegalStateException("commit already started");
+      throw new FDBException("Operation issued while a commit was outstanding", 2017);
     }
     if (readOnlyTx.get()) {
       versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
@@ -895,20 +895,14 @@ public class RemoteTransaction implements TransactionMixin {
    * Assert that the user can interact with this {@link RemoteTransaction}.
    */
   private void assertTransactionState() {
-    if (commitStarted.get()) {
-      throw new IllegalStateException("commit already started");
+    if (commitStarted.get() || completed.get()) {
+      throw new FDBException("Operation issued while a commit was outstanding", 2017);
     }
     if (cancelled.get()) {
-      throw new IllegalStateException("transaction already cancelled");
-    }
-    if (completed.get()) {
-      throw new IllegalStateException("transaction already completed");
+      throw new FDBException("Operation aborted because the transaction was cancelled", 1025);
     }
     if (remoteError != null) {
-      if (remoteError instanceof RuntimeException) {
-        throw (RuntimeException) remoteError;
-      }
-      throw new RuntimeException("server-side error encountered", remoteError);
+      throw new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100);
     }
   }
 

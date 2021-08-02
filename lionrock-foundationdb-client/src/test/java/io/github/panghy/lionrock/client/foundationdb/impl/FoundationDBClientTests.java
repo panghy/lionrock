@@ -659,7 +659,8 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     try {
       transaction.commit();
       fail();
-    } catch (IllegalStateException expected) {
+    } catch (FDBException ex) {
+      assertEquals(1025, ex.getCode());
     }
   }
 
