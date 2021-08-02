@@ -404,8 +404,8 @@ public class RemoteTransaction implements TransactionMixin {
       close();
       commitFuture.complete(null);
     } else {
-      batcher.flush(true);
       conflictRangeBatcher.flush(true);
+      batcher.flush(true);
       synchronized (requestSink) {
         requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
                 CommitTransactionRequest.newBuilder().build()).
@@ -443,6 +443,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<Long> getApproximateSize() {
     assertTransactionState();
     batcher.flush(true);
+    conflictRangeBatcher.flush(true);
     CompletableFuture<Long> toReturn = newCompletableFuture("getApproximateSize");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
