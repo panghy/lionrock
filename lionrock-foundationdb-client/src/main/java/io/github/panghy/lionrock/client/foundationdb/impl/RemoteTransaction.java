@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
+import static java.util.concurrent.CompletableFuture.failedFuture;
 
 /**
  * A {@link Transaction} that's backed by a gRPC streaming call.
@@ -45,6 +46,10 @@ public class RemoteTransaction implements TransactionMixin {
    */
   private static final FDBException NO_COMMIT_VERSION =
       new FDBException("Transaction is read-only and therefore does not have a commit version", 2021);
+  private static final FDBException USED_DURING_COMMIT =
+      new FDBException("Operation issued while a commit was outstanding", 2017);
+  private static final FDBException TRANSACTION_CANCELLED =
+      new FDBException("Operation aborted because the transaction was cancelled", 1025);
 
   private static final Metadata.Key<String> FDB_ERROR_CODE_KEY =
       Metadata.Key.of("fdb_error_code", Metadata.ASCII_STRING_MARSHALLER);
@@ -387,9 +392,12 @@ public class RemoteTransaction implements TransactionMixin {
 
   @Override
   public CompletableFuture<Void> commit() {
-    assertTransactionState();
-    if (commitStarted.getAndSet(true)) {
-      throw new FDBException("Operation issued while a commit was outstanding", 2017);
+    if (commitStarted.getAndSet(true) || completed.get()) {
+      return failedFuture(USED_DURING_COMMIT);
+    } else if (cancelled.get()) {
+      return failedFuture(TRANSACTION_CANCELLED);
+    } else if (remoteError != null) {
+      return failedFuture(new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100));
     }
     if (readOnlyTx.get()) {
       versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
@@ -458,7 +466,7 @@ public class RemoteTransaction implements TransactionMixin {
     }
     e = unwrapFdbException(e);
     if (!(e instanceof FDBException) || !FDBErrorCodes.isRetryable(((FDBException) e).getCode())) {
-      return CompletableFuture.failedFuture(e);
+      return failedFuture(e);
     }
     // now we need to figure out the delay and such.
     // 2ms initial retry (5 * 2 ^ 1).
@@ -470,7 +478,7 @@ public class RemoteTransaction implements TransactionMixin {
     long timeleftMs = remoteTransactionContext.getMillisecondsLeft();
     long timeLeftAfterDelayMs = timeleftMs - delayMs;
     if (remoteTransactionContext.getAttemptsLeft() <= 0 || timeLeftAfterDelayMs <= 0) {
-      return CompletableFuture.failedFuture(
+      return failedFuture(
           new FDBException("Operation aborted because the transaction timed out", 1031));
     }
     // completeOnTimeout won't work since we only want to create the tranaction when we do time out.
@@ -896,10 +904,10 @@ public class RemoteTransaction implements TransactionMixin {
    */
   private void assertTransactionState() {
     if (commitStarted.get() || completed.get()) {
-      throw new FDBException("Operation issued while a commit was outstanding", 2017);
+      throw USED_DURING_COMMIT;
     }
     if (cancelled.get()) {
-      throw new FDBException("Operation aborted because the transaction was cancelled", 1025);
+      throw TRANSACTION_CANCELLED;
     }
     if (remoteError != null) {
       throw new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100);

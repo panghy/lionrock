@@ -656,12 +656,14 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     Transaction transaction = db.createTransaction();
     transaction.set(HELLO_B, WORLD_B);
     transaction.cancel();
-    try {
-      transaction.commit();
-      fail();
-    } catch (FDBException ex) {
-      assertEquals(1025, ex.getCode());
-    }
+    CompletableFuture<Void> commit = transaction.commit();
+    assertTrue(commit.isCompletedExceptionally());
+    assertEquals(1025, commit.handle((unused, throwable) -> {
+      if (throwable instanceof FDBException) {
+        return ((FDBException) throwable).getCode();
+      }
+      return 0;
+    }).join());
   }
 
   @Test
