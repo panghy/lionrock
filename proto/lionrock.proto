@@ -72,6 +72,19 @@ message StreamingDatabaseRequest {
     GetEstimatedRangeSizeRequest get_estimated_range_size = 18;
     GetBoundaryKeysRequest get_boundary_keys = 19;
     GetAddressesForKeyRequest get_addresses_for_key = 20;
+    BatchedMutationsRequest batched_mutations = 21;
+  }
+}
+
+// A batched collected of mutations.
+message BatchedMutations {
+  oneof mutation {
+    SetValueRequest set_value = 1;
+    ClearKeyRequest clear_key = 2;
+    ClearKeyRangeRequest clear_range = 3;
+    AddConflictKeyRequest add_conflict_key = 4;
+    AddConflictRangeRequest add_conflict_range = 5;
+    MutateValueRequest mutate_value = 6;
   }
 }
 
@@ -348,6 +361,12 @@ message GetAddressesForKeyResponse {
   // request and for the server to stream results back to that original request.
   int64 sequence_id = 1;
   repeated string addresses = 2;
+}
+
+// The request for batched mutations
+message BatchedMutationsRequest {
+  // mutations batched.
+  repeated BatchedMutations mutations = 1;
 }
 
 // The response that's streamed back when a single async operation fails.

@@ -813,6 +813,126 @@ class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
     assertTrue(value.getGetAddressesForKey().getAddressesCount() > 0);
   }
 
+  @Test
+  public void testBatchedMutations() {
+    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
+        TransactionalKeyValueStoreGrpc.newStub(channel);
+
+    clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
+        "hello6".getBytes(StandardCharsets.UTF_8));
+
+    StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
+
+    StreamObserver<StreamingDatabaseRequest> serverStub;
+    serverStub = stub.executeTransaction(streamObs);
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setStartTransaction(StartTransactionRequest.newBuilder().
+            setName("getAddressesForKey").
+            setClientIdentifier("unit test").
+            setDatabaseName("fdb").
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setBatchedMutations(BatchedMutationsRequest.newBuilder().
+            // set hello, hello2, hello3, hello4, hello5 to world
+                addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello3", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello4", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello5", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            // set hello to world2
+                addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world2", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            // clear hello4
+                addMutations(BatchedMutations.newBuilder().
+                setClearKey(ClearKeyRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello4", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            // reset hello4 to world2
+                addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello4", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world2", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            // clear hello2 (hello3 is exclusive)
+                addMutations(BatchedMutations.newBuilder().
+                setClearRange(ClearKeyRangeRequest.newBuilder().
+                    setStart(ByteString.copyFrom("hello2", StandardCharsets.UTF_8)).
+                    setEnd(ByteString.copyFrom("hello3", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            // set hello5 to world2
+                addMutations(BatchedMutations.newBuilder().
+                setSetValue(SetValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello5", StandardCharsets.UTF_8)).
+                    setValue(ByteString.copyFrom("world2", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            // clear hello if equal to world (ignore)
+                addMutations(BatchedMutations.newBuilder().
+                setMutateValue(MutateValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello", StandardCharsets.UTF_8)).
+                    setType(MutationType.COMPARE_AND_CLEAR).
+                    setParam(ByteString.copyFrom("world", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            // clear hello5 if equal to world2
+                addMutations(BatchedMutations.newBuilder().
+                setMutateValue(MutateValueRequest.newBuilder().
+                    setKey(ByteString.copyFrom("hello5", StandardCharsets.UTF_8)).
+                    setType(MutationType.COMPARE_AND_CLEAR).
+                    setParam(ByteString.copyFrom("world2", StandardCharsets.UTF_8)).
+                    build()).
+                build()).
+            build()).
+        build());
+    serverStub.onNext(StreamingDatabaseRequest.newBuilder().
+        setCommitTransaction(CommitTransactionRequest.newBuilder().build()).
+        build());
+
+    verify(streamObs, timeout(5000).times(1)).onNext(streamingDatabaseResponseCapture.capture());
+    serverStub.onCompleted();
+    verify(streamObs, never()).onError(any());
+
+    // now check that hello is world2, hello2 is null, hello3 is world, hello4 is world2 and hello5 is null.
+    assertEquals("world2", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
+    assertNull(getValue(stub, "hello2".getBytes(StandardCharsets.UTF_8)));
+    assertEquals("world", getValue(stub, "hello3".getBytes(StandardCharsets.UTF_8)));
+    assertEquals("world2", getValue(stub, "hello4".getBytes(StandardCharsets.UTF_8)));
+    assertNull(getValue(stub, "hello5".getBytes(StandardCharsets.UTF_8)));
+  }
+
   private byte[] setupRangeTest(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
