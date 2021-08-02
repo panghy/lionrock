@@ -388,6 +388,9 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Void> commit() {
     assertTransactionState();
+    if (commitStarted.getAndSet(true)) {
+      throw new FDBException("Operation issued while a commit was outstanding", 2017);
+    }
     if (readOnlyTx.get()) {
       versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
       close();
