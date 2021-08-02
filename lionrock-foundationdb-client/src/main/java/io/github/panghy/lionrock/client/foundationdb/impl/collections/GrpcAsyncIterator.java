@@ -117,10 +117,12 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
     if (cancelled) {
       throw new CancellationException();
     }
-    if (!responses.isEmpty()) {
-      return true;
-    } else if (done) {
-      return false;
+    synchronized (responses) {
+      if (!responses.isEmpty()) {
+        return true;
+      } else if (done) {
+        return false;
+      }
     }
     return onHasNext().join();
   }
