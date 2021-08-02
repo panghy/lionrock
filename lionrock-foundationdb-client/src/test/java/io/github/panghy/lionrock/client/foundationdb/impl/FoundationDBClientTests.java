@@ -467,6 +467,7 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
       }
       return tx.getReadVersion().
           thenApplyAsync(v -> {
+            tx.getReadVersion().join();
             tx.addReadConflictKey(HELLO_B);
             txLatch.countDown();
             try {

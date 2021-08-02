@@ -66,6 +66,7 @@ public class RemoteTransaction implements TransactionMixin {
   private final SequenceResponseDemuxer demuxer;
   private final RemoteTransactionContext remoteTransactionContext;
   private final MutationsBatcher batcher;
+  private final MutationsBatcher conflictRangeBatcher;
   /**
    * Instance of {@link TransactionOptions} for this transaction context.
    */
@@ -207,6 +208,7 @@ public class RemoteTransaction implements TransactionMixin {
     this.remoteTransactionContext = remoteTransactionContext;
     this.demuxer = new SequenceResponseDemuxer();
     this.batcher = new MutationsBatcher(requestSink, MUTATIONS_FLUSH_BATCH_THRESHOLD);
+    this.conflictRangeBatcher = new MutationsBatcher(requestSink, MUTATIONS_FLUSH_BATCH_THRESHOLD);
   }
 
   private class RemoteReadTransaction implements ReadTransactionMixin {
@@ -283,7 +285,7 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void addReadConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
-    batcher.addConflictRange(
+    conflictRangeBatcher.addConflictRange(
         AddConflictRangeRequest.newBuilder().
             setStart(ByteString.copyFrom(keyBegin)).
             setEnd(ByteString.copyFrom(keyEnd)).
@@ -295,7 +297,7 @@ public class RemoteTransaction implements TransactionMixin {
   public void addWriteConflictRange(byte[] keyBegin, byte[] keyEnd) {
     assertTransactionState();
     readOnlyTx.set(false);
-    batcher.addConflictRange(
+    conflictRangeBatcher.addConflictRange(
         AddConflictRangeRequest.newBuilder().
             setStart(ByteString.copyFrom(keyBegin)).
             setEnd(ByteString.copyFrom(keyEnd)).
@@ -402,6 +404,7 @@ public class RemoteTransaction implements TransactionMixin {
       close();
       commitFuture.complete(null);
     } else {
+      conflictRangeBatcher.flush(true);
       batcher.flush(true);
       synchronized (requestSink) {
         requestSink.onNext(StreamingDatabaseRequest.newBuilder().setCommitTransaction(
@@ -440,6 +443,7 @@ public class RemoteTransaction implements TransactionMixin {
   public CompletableFuture<Long> getApproximateSize() {
     assertTransactionState();
     batcher.flush(true);
+    conflictRangeBatcher.flush(true);
     CompletableFuture<Long> toReturn = newCompletableFuture("getApproximateSize");
     long curr = registerHandler(new StreamingDatabaseResponseVisitorStub() {
 
