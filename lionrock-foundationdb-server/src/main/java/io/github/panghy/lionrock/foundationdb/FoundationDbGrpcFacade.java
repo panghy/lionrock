@@ -1446,6 +1446,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         if (tx != null) {
           tx.close();
         }
+        synchronized (responseObserver) {
+          try {
+            responseObserver.onError(t);
+          } catch (RuntimeException ignored) {
+          }
+        }
       }
 
       @Override
