@@ -658,7 +658,7 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
     transaction.cancel();
     CompletableFuture<Void> commit = transaction.commit();
     assertTrue(commit.isCompletedExceptionally());
-    assertEquals(1024, commit.handle((unused, throwable) -> {
+    assertEquals(1025, commit.handle((unused, throwable) -> {
       if (throwable instanceof FDBException) {
         return ((FDBException) throwable).getCode();
       }
