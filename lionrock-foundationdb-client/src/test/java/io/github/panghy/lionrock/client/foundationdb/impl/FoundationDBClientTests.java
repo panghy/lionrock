@@ -686,6 +686,20 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
   }
 
   @Test
+  public void testTimeout() {
+    assertThrows(CompletionException.class, () -> {
+      db.run(tx -> {
+        tx.options().setTimeout(1);
+        try {
+          Thread.sleep(1);
+        } catch (InterruptedException ignored) {
+        }
+        return tx.get(HELLO_B).join();
+      });
+    });
+  }
+
+  @Test
   public void testGetEstimatedRangeSize() {
     clearRangeAndCommit(db, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
