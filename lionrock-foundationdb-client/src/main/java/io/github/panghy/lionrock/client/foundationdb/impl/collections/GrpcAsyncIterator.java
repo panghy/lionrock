@@ -36,11 +36,11 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
   private T prev = null;
 
   private final Function<Resp, Stream<T>> respToStreamFunction;
-  private Function<String, CompletableFuture<Boolean>> completableFutureSupplier;
+  private final Function<String, CompletableFuture<Boolean>> completableFutureSupplier;
   private final Function<Resp, Boolean> isDoneFunction;
   private final Executor executor;
 
-  public GrpcAsyncIterator(RemovalCallback removalCallback,
+  public GrpcAsyncIterator(RemovalCallback<T> removalCallback,
                            Function<Resp, Stream<T>> respToStreamFunction,
                            Function<String, CompletableFuture<Boolean>> completableFutureSupplier,
                            Function<Resp, Boolean> isDoneFunction, Executor executor) {
