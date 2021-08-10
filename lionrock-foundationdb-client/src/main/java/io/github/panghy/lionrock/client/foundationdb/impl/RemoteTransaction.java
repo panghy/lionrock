@@ -1028,16 +1028,22 @@ public class RemoteTransaction implements TransactionMixin {
 
     /**
      * Set the timeout of the transaction.
+     *
+     * @param timeoutMs Timeout in millisecond.
      */
     void setTimeout(long timeoutMs);
 
     /**
      * Set the max retry delay of the transaction.
+     *
+     * @param delayMs max retry delay in milliseconds.
      */
     void setMaxRetryDelay(long delayMs);
 
     /**
      * Set the retry attempts of the transaction.
+     *
+     * @param limit retry limit.
      */
     void setRetryLimit(long limit);
   }
