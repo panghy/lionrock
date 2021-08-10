@@ -78,10 +78,10 @@ public class RemoteFDBDatabaseFactory extends FDBDatabaseFactoryBase {
 
   @Override
   @Nonnull
-  public synchronized FDBDatabaseImpl getDatabase(@Nullable String clusterFile) {
-    FDBDatabaseImpl database = databases.get(clusterFile);
+  public synchronized FDBDatabase getDatabase(@Nullable String clusterFile) {
+    FDBDatabase database = databases.get(clusterFile);
     if (database == null) {
-      database = new FDBDatabaseImpl(this, clusterFile);
+      database = new FDBDatabase(this, clusterFile);
       database.setDirectoryCacheSize(getDirectoryCacheSize());
       database.setTrackLastSeenVersion(getTrackLastSeenVersion());
       database.setResolverStateRefreshTimeMillis(getStateRefreshTimeMillis());
