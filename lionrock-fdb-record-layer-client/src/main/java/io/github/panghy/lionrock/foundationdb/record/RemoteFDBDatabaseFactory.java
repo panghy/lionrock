@@ -1,7 +1,10 @@
 package io.github.panghy.lionrock.foundationdb.record;
 
 import com.apple.foundationdb.Database;
-import com.apple.foundationdb.record.provider.foundationdb.*;
+import com.apple.foundationdb.record.provider.foundationdb.FDBDatabase;
+import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory;
+import com.apple.foundationdb.record.provider.foundationdb.FDBLocalityProvider;
+import com.apple.foundationdb.record.provider.foundationdb.FDBTraceFormat;
 import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
 import io.grpc.ManagedChannel;
 import org.slf4j.Logger;
@@ -17,7 +20,7 @@ import java.util.function.Supplier;
  *
  * @author Clement Pang
  */
-public class RemoteFDBDatabaseFactory extends FDBDatabaseFactoryBase {
+public class RemoteFDBDatabaseFactory extends FDBDatabaseFactory {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RemoteFDBDatabaseFactory.class);
 
