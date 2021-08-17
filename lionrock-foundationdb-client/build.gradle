@@ -46,7 +46,7 @@ dependencies {
 
     // replace after refactoring.
     testImplementation 'io.grpc:grpc-stub:1.39.0'
-    testImplementation 'io.grpc:grpc-netty:1.39.0'
+    testImplementation 'io.grpc:grpc-netty:1.40.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
     testRuntimeOnly 'io.github.lognet:grpc-spring-boot-starter:4.5.5'
