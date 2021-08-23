@@ -33,10 +33,12 @@ dependencies {
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
 
-    testImplementation 'io.grpc:grpc-netty:1.39.0'
+    testImplementation 'io.grpc:grpc-netty:1.40.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
-    testRuntimeOnly 'io.github.lognet:grpc-spring-boot-starter:4.5.5'
+    testRuntimeOnly ('io.github.lognet:grpc-spring-boot-starter:4.5.5') {
+        exclude group: 'io.grpc', module: 'grpc-netty-shaded'
+    }
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
