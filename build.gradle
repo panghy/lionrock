@@ -18,6 +18,16 @@ subprojects {
     }
 }
 
+subprojects {
+    configurations.all {
+        resolutionStrategy.eachDependency { details ->
+            if ("io.grpc".equalsIgnoreCase(details.requested.group)) {
+                details.useVersion "1.40.0"
+            }
+        }
+    }
+}
+
 release {
     tagTemplate = 'v${version}'
     // TODO remove once we have a record layer build.
