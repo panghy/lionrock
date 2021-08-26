@@ -32,7 +32,7 @@ dependencies {
     implementation 'com.google.protobuf:protobuf-java:3.17.3'
     protobuf 'com.google.protobuf:protobuf-java:3.17.3'
 
-    implementation 'io.grpc:grpc-protobuf:1.40.0'
+    implementation 'io.grpc:grpc-protobuf:1.40.1'
     implementation 'io.grpc:grpc-stub:1.40.1'
     compileOnly 'org.apache.tomcat:annotations-api:6.0.53' // necessary for Java 9+
 }
