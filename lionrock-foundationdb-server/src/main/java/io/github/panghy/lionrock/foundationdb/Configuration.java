@@ -62,6 +62,7 @@ public class Configuration {
   public static class Cluster {
     private String clusterFile;
     private String name;
+    private boolean checkOnStartup = true;
 
     public String getClusterFile() {
       return clusterFile;
@@ -77,6 +78,14 @@ public class Configuration {
 
     public void setName(String name) {
       this.name = name;
+    }
+
+    public boolean isCheckOnStartup() {
+      return checkOnStartup;
+    }
+
+    public void setCheckOnStartup(boolean checkOnStartup) {
+      this.checkOnStartup = checkOnStartup;
     }
   }
 

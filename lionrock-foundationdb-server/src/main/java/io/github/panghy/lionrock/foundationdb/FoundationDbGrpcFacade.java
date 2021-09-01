@@ -65,11 +65,27 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
     logger.info("Configuring: " + config.getClusters().size() + " clusters for gRPC access " +
         "(FDB API Version: " + config.getFdbVersion() + ")");
     FDB.selectAPIVersion(config.getFdbVersion());
+    List<CompletableFuture<?>> readVersionCFs = new ArrayList<>(config.getClusters().size());
     for (Configuration.Cluster cluster : config.getClusters()) {
       clusterMap.put(cluster.getName(), cluster);
       Database fdb = FDB.instance().open(cluster.getClusterFile());
+      if (cluster.isCheckOnStartup()) {
+        long start = System.currentTimeMillis();
+        readVersionCFs.add(fdb.runAsync(ReadTransaction::getReadVersion).
+            orTimeout(config.getDefaultFdbTimeoutMs(), TimeUnit.MILLISECONDS).
+            whenComplete((rv, exception) -> {
+              if (exception == null) {
+                logger.info("Cluster: " + cluster.getName() + " with file: " + cluster.getClusterFile() +
+                    " get read version is: " + rv + " [" + (System.currentTimeMillis() - start) + "ms]");
+              } else {
+                logger.warn("Cluster: " + cluster.getName() + " with file: " + cluster.getClusterFile() +
+                    " failed to get read version after" + (System.currentTimeMillis() - start) + "ms", exception);
+              }
+            }));
+      }
       databaseMap.put(cluster.getName(), fdb);
     }
+    CompletableFuture.allOf(readVersionCFs.toArray(CompletableFuture[]::new)).join();
   }
 
   @Override
