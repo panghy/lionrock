@@ -10,7 +10,6 @@ import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -38,18 +37,16 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
   private final Function<Resp, Stream<T>> respToStreamFunction;
   private final Function<String, CompletableFuture<Boolean>> completableFutureSupplier;
   private final Function<Resp, Boolean> isDoneFunction;
-  private final Executor executor;
 
   public GrpcAsyncIterator(RemovalCallback<T> removalCallback,
                            Function<Resp, Stream<T>> respToStreamFunction,
                            Function<String, CompletableFuture<Boolean>> completableFutureSupplier,
-                           Function<Resp, Boolean> isDoneFunction, Executor executor) {
+                           Function<Resp, Boolean> isDoneFunction) {
     this.removalCallback = removalCallback;
     this.respToStreamFunction = respToStreamFunction;
     this.completableFutureSupplier = completableFutureSupplier;
     this.onHasNextFuture = completableFutureSupplier.apply("GrpcAsyncIterator.onHasNext()");
     this.isDoneFunction = isDoneFunction;
-    this.executor = executor;
   }
 
   void accept(Resp resp) {
@@ -68,9 +65,9 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
       if (wasEmpty) {
         // waiting for key values.
         if (isDoneFunction.apply(resp) && responses.isEmpty()) {
-          onHasNextFuture.completeAsync(() -> false, executor);
+          onHasNextFuture.complete(false);
         } else if (!responses.isEmpty()) {
-          onHasNextFuture.completeAsync(() -> true, executor);
+          onHasNextFuture.complete(true);
         }
       }
     }
@@ -102,12 +99,7 @@ public class GrpcAsyncIterator<T, Resp> implements AsyncIterator<T> {
         // already done and no responses left.
         return AsyncUtil.READY_FALSE;
       }
-      if (responses.isEmpty() &&
-          (onHasNextFuture == null ||
-              (onHasNextFuture.isDone() &&
-                  !onHasNextFuture.isCompletedExceptionally()))) {
-        onHasNextFuture = completableFutureSupplier.apply("GrpcAsyncIterator.onHasNext()");
-      }
+      onHasNextFuture = completableFutureSupplier.apply("GrpcAsyncIterator.onHasNext()");
     }
     return onHasNextFuture;
   }

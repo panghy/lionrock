@@ -1,7 +1,6 @@
 package io.github.panghy.lionrock.client.foundationdb.impl.collections;
 
 import com.apple.foundationdb.FDBException;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.client.foundationdb.impl.NamedCompletableFuture;
 import io.github.panghy.lionrock.proto.GetRangeResponse;
@@ -27,7 +26,7 @@ class GrpcAsyncIteratorTest {
             resp -> resp.getKeyValuesList().stream().map(x ->
                 new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
             NamedCompletableFuture::new,
-            GetRangeResponse::getDone, MoreExecutors.directExecutor());
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element and dequeue (also check remove()).
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -121,7 +120,7 @@ class GrpcAsyncIteratorTest {
             resp -> resp.getKeyValuesList().stream().map(x ->
                 new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
             NamedCompletableFuture::new,
-            GetRangeResponse::getDone, MoreExecutors.directExecutor());
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element.
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -180,7 +179,7 @@ class GrpcAsyncIteratorTest {
             resp -> resp.getKeyValuesList().stream().map(x ->
                 new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
             NamedCompletableFuture::new,
-            GetRangeResponse::getDone, MoreExecutors.directExecutor());
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element and dequeue (also check remove()).
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -213,7 +212,7 @@ class GrpcAsyncIteratorTest {
             resp -> resp.getKeyValuesList().stream().map(x ->
                 new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
             NamedCompletableFuture::new,
-            GetRangeResponse::getDone, MoreExecutors.directExecutor());
+            GetRangeResponse::getDone);
 
     // add 1st and 2nd element and dequeue (also check remove()).
     CompletableFuture<Boolean> cf = iterator.onHasNext();
@@ -260,7 +259,7 @@ class GrpcAsyncIteratorTest {
             resp -> resp.getKeyValuesList().stream().map(x ->
                 new com.apple.foundationdb.KeyValue(x.getKey().toByteArray(), x.getValue().toByteArray())),
             NamedCompletableFuture::new,
-            GetRangeResponse::getDone, MoreExecutors.directExecutor());
+            GetRangeResponse::getDone);
     try {
       // can't remove before having first fetch.
       iterator.remove();
