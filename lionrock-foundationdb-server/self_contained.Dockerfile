@@ -25,6 +25,8 @@ RUN dpkg -i foundationdb-server_6.3.15-1_amd64.deb
 RUN rm foundationdb-clients_6.3.15-1_amd64.deb
 RUN rm foundationdb-server_6.3.15-1_amd64.deb
 
+RUN mkdir -p /var/fdb/logs
+
 WORKDIR /
 
 ARG JAR_FILE=build/libs/lionrock-foundationdb-server-*.*.*-boot.jar
