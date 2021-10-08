@@ -39,7 +39,7 @@ dependencies {
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.18.1'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.0.0'
-    testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
+    testImplementation 'org.mockito:mockito-junit-jupiter:4.0.0'
 
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
