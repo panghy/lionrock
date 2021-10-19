@@ -20,6 +20,11 @@ public class Configuration {
    */
   private long defaultFdbTimeoutMs = 60_000;
 
+  /**
+   * Controls the number of times startup GRV is attempted (Each with {@link #defaultFdbTimeoutMs}.
+   */
+  private int startupGetReadVersionRetries = 3;
+
   private List<Cluster> clusters = new ArrayList<>();
 
   /**
@@ -57,6 +62,14 @@ public class Configuration {
 
   public void setDefaultFdbTimeoutMs(long defaultFdbTimeoutMs) {
     this.defaultFdbTimeoutMs = defaultFdbTimeoutMs;
+  }
+
+  public int getStartupGetReadVersionRetries() {
+    return startupGetReadVersionRetries;
+  }
+
+  public void setStartupGetReadVersionRetries(int startupGetReadVersionRetries) {
+    this.startupGetReadVersionRetries = startupGetReadVersionRetries;
   }
 
   public static class Cluster {

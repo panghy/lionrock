@@ -70,22 +70,66 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       clusterMap.put(cluster.getName(), cluster);
       Database fdb = FDB.instance().open(cluster.getClusterFile());
       if (cluster.isCheckOnStartup()) {
-        long start = System.currentTimeMillis();
-        readVersionCFs.add(fdb.runAsync(ReadTransaction::getReadVersion).
-            orTimeout(config.getDefaultFdbTimeoutMs(), TimeUnit.MILLISECONDS).
-            whenComplete((rv, exception) -> {
+        if (config.getStartupGetReadVersionRetries() < 0) {
+          throw new IllegalArgumentException("startup GRV retry must be >= 0");
+        }
+        AtomicLong start = new AtomicLong(System.currentTimeMillis());
+        CompletableFuture<Long> readVersionF;
+        // first attempt (or only attempt).
+        if (config.getStartupGetReadVersionRetries() == 0) {
+          // no retry.
+          readVersionF = getReadVersionWithTimeout(fdb);
+        } else {
+          readVersionF = getReadVersionOrLog(cluster, fdb, start);
+        }
+        // retry (except the last one).
+        for (int i = 0; i < config.getStartupGetReadVersionRetries() - 1; i++) {
+          readVersionF = readVersionF.thenCompose(readVersion -> {
+            if (readVersion == -1L) {
+              start.set(System.currentTimeMillis());
+              return getReadVersionOrLog(cluster, fdb, start);
+            }
+            return CompletableFuture.completedFuture(readVersion);
+          });
+        }
+        // last attempt will throw if timing out.
+        if (config.getStartupGetReadVersionRetries() > 0) {
+          readVersionF = readVersionF.thenCompose(readVersion -> {
+            if (readVersion == -1L) {
+              start.set(System.currentTimeMillis());
+              return getReadVersionWithTimeout(fdb);
+            }
+            return CompletableFuture.completedFuture(readVersion);
+          });
+        }
+        readVersionCFs.add(
+            readVersionF.whenComplete((rv, exception) -> {
               if (exception == null) {
                 logger.info("Cluster: " + cluster.getName() + " with file: " + cluster.getClusterFile() +
-                    " get read version is: " + rv + " [" + (System.currentTimeMillis() - start) + "ms]");
+                    " get read version is: " + rv + " [" + (System.currentTimeMillis() - start.get()) + "ms]");
               } else {
                 logger.warn("Cluster: " + cluster.getName() + " with file: " + cluster.getClusterFile() +
-                    " failed to get read version after" + (System.currentTimeMillis() - start) + "ms", exception);
+                    " failed to get read version after" + (System.currentTimeMillis() - start.get()) + "ms", exception);
               }
             }));
       }
       databaseMap.put(cluster.getName(), fdb);
     }
     CompletableFuture.allOf(readVersionCFs.toArray(CompletableFuture[]::new)).join();
+  }
+
+  private CompletableFuture<Long> getReadVersionOrLog(
+      Configuration.Cluster cluster, Database fdb, AtomicLong start) {
+    return getReadVersionWithTimeout(fdb).exceptionally(ex -> {
+      logger.warn("Cluster: " + cluster.getName() + " with file: " + cluster.getClusterFile() +
+          " failed to get read version after" + (System.currentTimeMillis() - start.get()) + "ms", ex);
+      return -1L;
+    });
+  }
+
+  private CompletableFuture<Long> getReadVersionWithTimeout(Database fdb) {
+    return fdb.runAsync(ReadTransaction::getReadVersion).
+        orTimeout(config.getDefaultFdbTimeoutMs(), TimeUnit.MILLISECONDS);
   }
 
   @Override
