@@ -32,7 +32,7 @@ dependencies {
     implementation 'com.google.protobuf:protobuf-java:3.19.1'
     protobuf 'com.google.protobuf:protobuf-java:3.19.0'
 
-    implementation 'io.grpc:grpc-protobuf:1.41.0'
+    implementation 'io.grpc:grpc-protobuf:1.42.0'
     implementation 'io.grpc:grpc-stub:1.41.0'
     compileOnly 'org.apache.tomcat:annotations-api:6.0.53' // necessary for Java 9+
 }
@@ -55,7 +55,7 @@ protobuf {
     }
     plugins {
         grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:1.41.0'
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.42.0'
         }
     }
     generateProtoTasks {
