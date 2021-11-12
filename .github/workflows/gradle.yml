@@ -114,7 +114,7 @@ jobs:
 
       - name: Generate JaCoCo Badge
         id: jacoco
-        uses: cicirello/jacoco-badge-generator@v2.4.1
+        uses: cicirello/jacoco-badge-generator@v2.5.0
         with:
           generate-branches-badge: true
           jacoco-csv-file: build/reports/jacoco/codeCoverageReport/codeCoverageReport.csv
