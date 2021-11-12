@@ -50,7 +50,7 @@ dependencies {
     testRuntimeOnly ('io.github.lognet:grpc-spring-boot-starter:4.5.10')
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
 }
 
 dependencyManagement {
