@@ -28,7 +28,7 @@ dependencies {
     // replace after refactoring https://github.com/FoundationDB/fdb-record-layer/pull/1344.
     implementation 'io.github.panghy.foundationdb:fdb-record-layer-core-pb3:999.3.0-SNAPSHOT'
     implementation project(':lionrock-foundationdb-client')
-    implementation 'io.grpc:grpc-stub:1.42.0'
+    implementation 'io.grpc:grpc-stub:1.42.1'
 
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
