@@ -919,15 +919,6 @@ public class RemoteTransaction implements TransactionMixin {
     return curr;
   }
 
-  @Override
-  protected void finalize() throws Throwable {
-    try {
-      close();
-    } finally {
-      super.finalize();
-    }
-  }
-
   /**
    * @return whether {@link #getFailedFuture()} would produce a failed future.
    */
