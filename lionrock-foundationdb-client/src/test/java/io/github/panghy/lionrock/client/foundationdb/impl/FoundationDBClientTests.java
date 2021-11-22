@@ -739,4 +739,12 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
         getAddressesForKey(tx, "hello".getBytes(StandardCharsets.UTF_8))).join();
     assertTrue(join.length > 0);
   }
+
+  @Test
+  public void testNoCommit() {
+    Transaction transaction = db.createTransaction();
+    CompletableFuture<byte[]> completableFuture = transaction.get(HELLO_B);
+    completableFuture.join();
+    transaction.close();
+  }
 }

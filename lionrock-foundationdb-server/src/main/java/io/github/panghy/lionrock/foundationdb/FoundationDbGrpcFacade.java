@@ -1500,7 +1500,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
       @Override
       public void onError(Throwable t) {
-        logger.warn("onError from client in executeTransaction", t);
+        if (t instanceof StatusRuntimeException &&
+            ((StatusRuntimeException) t).getStatus().getCode() == Status.CANCELLED.getCode()) {
+          logger.warn("client cancelled (likely no commit)");
+        } else {
+          logger.warn("onError from client in executeTransaction", t);
+        }
         populateOverallSpanStats();
         longLivingFutures.forEach(x -> x.cancel(false));
         if (tx != null) {

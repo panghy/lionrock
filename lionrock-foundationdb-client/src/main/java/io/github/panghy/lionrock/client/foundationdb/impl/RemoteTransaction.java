@@ -414,7 +414,6 @@ public class RemoteTransaction implements TransactionMixin {
       return failedFuture(new FDBException("remote server-side error encountered: " + remoteError.getMessage(), 4100));
     }
     if (readOnlyTx.get()) {
-      versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
       close();
       commitFuture.complete(null);
     } else {
@@ -576,6 +575,9 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public void close() {
     if (!completed.getAndSet(true)) {
+      // complete the versionstamp future on close (if necessary).
+      // one can call close() without calling commit() and we need to make sure that it's not dangling.
+      versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
       // wait until all outstanding futures complete before closing the connection to the server.
       CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).
           whenComplete((unused, throwable) -> requestSink.onCompleted());
