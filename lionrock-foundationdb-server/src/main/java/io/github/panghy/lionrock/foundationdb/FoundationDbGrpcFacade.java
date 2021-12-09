@@ -1502,9 +1502,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
       public void onError(Throwable t) {
         populateOverallSpanStats();
         longLivingFutures.forEach(x -> x.cancel(false));
-        if (tx != null) {
-          tx.close();
-        }
+        closeAndDiscardTx();
         if (t instanceof StatusRuntimeException &&
             ((StatusRuntimeException) t).getStatus().getCode() == Status.CANCELLED.getCode()) {
           logger.warn("client cancelled (likely no commit)");
@@ -1530,9 +1528,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         logger.debug("client onCompleted()");
         populateOverallSpanStats();
         longLivingFutures.forEach(x -> x.cancel(false));
-        if (tx != null) {
-          tx.close();
-        }
+        closeAndDiscardTx();
       }
 
       private void throwIfSequenceIdHasBeenSeen(long sequenceId) {
@@ -1540,9 +1536,14 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
           onError(Status.INVALID_ARGUMENT.
               withDescription("sequenceId: " + sequenceId + " has been seen before in this transaction").
               asRuntimeException());
-          if (tx != null) {
-            tx.close();
-          }
+          closeAndDiscardTx();
+        }
+      }
+
+      private void closeAndDiscardTx() {
+        if (tx != null) {
+          tx.close();
+          tx = null;
         }
       }
 
