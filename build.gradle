@@ -10,6 +10,11 @@ allprojects {
     repositories {
         mavenCentral()
     }
+
+    ext {
+        set('springCloudVersion', "2021.0.0")
+        set('wavefrontVersion', "2.2.2")
+    }
 }
 
 subprojects {
