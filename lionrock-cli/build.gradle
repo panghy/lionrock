@@ -58,7 +58,7 @@ generateNativeImageConfig {
 }
 
 dependencies {
-    implementation 'io.grpc:grpc-stub:1.42.1'
+    implementation 'io.grpc:grpc-stub:1.43.2'
     implementation 'io.grpc:grpc-okhttp:1.43.0'
 
     implementation project(':lionrock-foundationdb-client')
