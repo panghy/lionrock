@@ -26,7 +26,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.google.protobuf:protobuf-java:3.19.1'
+    implementation 'com.google.protobuf:protobuf-java:3.19.4'
     protobuf 'com.google.protobuf:protobuf-java:3.19.1'
 
     implementation 'io.grpc:grpc-protobuf:1.43.0'
