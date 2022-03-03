@@ -1,4 +1,4 @@
-ARG FDB_VERSION=6.3.15
+ARG FDB_VERSION=6.3.23
 
 FROM foundationdb/foundationdb:${FDB_VERSION} as fdb
 

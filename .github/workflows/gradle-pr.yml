@@ -22,16 +22,16 @@ jobs:
         run: wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
 
       - name: install fdb-client
-        run: sudo dpkg -i foundationdb-clients_6.3.15-1_amd64.deb
+        run: sudo dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
 
       - name: install fdb-server
-        run: sudo dpkg -i foundationdb-server_6.3.15-1_amd64.deb
+        run: sudo dpkg -i foundationdb-server_6.3.23-1_amd64.deb
 
       - name: remove fdb-client
-        run: rm foundationdb-clients_6.3.15-1_amd64.deb
+        run: rm foundationdb-clients_6.3.23-1_amd64.deb
 
       - name: remove fdb-server
-        run: rm foundationdb-server_6.3.15-1_amd64.deb
+        run: rm foundationdb-server_6.3.23-1_amd64.deb
 
       - uses: ayltai/setup-graalvm@v1
         with:

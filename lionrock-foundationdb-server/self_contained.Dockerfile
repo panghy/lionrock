@@ -20,10 +20,10 @@ WORKDIR /
 
 RUN wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
 RUN wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
-RUN dpkg -i foundationdb-clients_6.3.15-1_amd64.deb
-RUN dpkg -i foundationdb-server_6.3.15-1_amd64.deb
-RUN rm foundationdb-clients_6.3.15-1_amd64.deb
-RUN rm foundationdb-server_6.3.15-1_amd64.deb
+RUN dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+RUN dpkg -i foundationdb-server_6.3.23-1_amd64.deb
+RUN rm foundationdb-clients_6.3.23-1_amd64.deb
+RUN rm foundationdb-server_6.3.23-1_amd64.deb
 
 RUN mkdir -p /var/fdb/logs
 
