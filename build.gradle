@@ -27,7 +27,7 @@ subprojects {
     configurations.all {
         resolutionStrategy.eachDependency { details ->
             if ("io.grpc".equalsIgnoreCase(details.requested.group)) {
-                details.useVersion "1.40.0"
+                details.useVersion "1.44.1"
             }
         }
     }

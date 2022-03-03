@@ -27,10 +27,10 @@ repositories {
 
 dependencies {
     implementation 'com.google.protobuf:protobuf-java:3.19.4'
-    protobuf 'com.google.protobuf:protobuf-java:3.19.1'
+    protobuf 'com.google.protobuf:protobuf-java:3.19.4'
 
     implementation 'io.grpc:grpc-protobuf:1.44.1'
-    implementation 'io.grpc:grpc-stub:1.42.1'
+    implementation 'io.grpc:grpc-stub:1.44.1'
     compileOnly 'org.apache.tomcat:annotations-api:6.0.53' // necessary for Java 9+
 }
 
