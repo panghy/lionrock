@@ -35,7 +35,7 @@ dependencies {
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.19.1'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.2.0'
-    testImplementation 'org.mockito:mockito-junit-jupiter:4.1.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:4.3.1'
 
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
@@ -43,7 +43,7 @@ dependencies {
     // replace after refactoring.
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
-    testRuntimeOnly('io.github.lognet:grpc-spring-boot-starter:4.5.10')
+    testRuntimeOnly('io.github.lognet:grpc-spring-boot-starter:4.6.0')
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
