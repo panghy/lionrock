@@ -32,7 +32,7 @@ RUN mkdir /usr/lib/fdb-multiversion; \
 
 RUN ldconfig
 
-COPY release/start.bash /bash
+COPY release/start.bash /bash/start.bash
 RUN chmod a+x /bash/start.bash
 
 WORKDIR /
