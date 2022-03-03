@@ -125,7 +125,7 @@ jobs:
           echo "branch coverage = ${{ steps.jacoco.outputs.branches }}"
 
       - name: Add new badge
-        uses: EndBug/add-and-commit@v7
+        uses: EndBug/add-and-commit@v8.0.2
         continue-on-error: true
         with:
           default_author: github_actions
