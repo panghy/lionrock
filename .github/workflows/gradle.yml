@@ -68,10 +68,10 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: download fdb-client
-        run: wget https://www.foundationdb.org/downloads/6.3.15/ubuntu/installers/foundationdb-clients_6.3.15-1_amd64.deb
+        run: wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
 
       - name: download fdb-server
-        run: wget https://www.foundationdb.org/downloads/6.3.15/ubuntu/installers/foundationdb-server_6.3.15-1_amd64.deb
+        run: wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
 
       - name: install fdb-client
         run: sudo dpkg -i foundationdb-clients_6.3.15-1_amd64.deb
