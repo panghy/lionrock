@@ -21,14 +21,13 @@ RUN apt-get update && \
 
 COPY --from=fdb /usr/lib/libfdb_c.so /usr/lib
 COPY --from=fdb /usr/bin/fdbcli /usr/bin/
-COPY --from=fdb /var/fdb/scripts/create_cluster_file.bash /bash/
 
-ARG FDB_WEBSITE=https://www.foundationdb.org
+ARG FDB_WEBSITE=https://github.com/apple/foundationdb/releases/downloads
 ARG FDB_ADDITIONAL_VERSIONS="5.1.7 6.2.30"
 ENV FDB_NETWORK_OPTION_EXTERNAL_CLIENT_DIRECTORY=/usr/lib/fdb-multiversion
 RUN mkdir /usr/lib/fdb-multiversion; \
 	for version in ${FDB_ADDITIONAL_VERSIONS}; do \
-		curl ${FDB_WEBSITE}/downloads/$version/linux/libfdb_c_$version.so -o /usr/lib/fdb-multiversion/libfdb_c_$version.so; \
+		curl ${FDB_WEBSITE}/$version/libfdb_c.x86_64.so -o /usr/lib/fdb-multiversion/libfdb_c_$version.so; \
 	done
 
 RUN ldconfig
