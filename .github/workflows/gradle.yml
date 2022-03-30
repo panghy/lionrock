@@ -24,7 +24,7 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3.0.1
         with:
           path: |
             ~/.gradle/caches
@@ -93,7 +93,7 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3.0.1
         with:
           path: |
             ~/.gradle/caches
@@ -153,7 +153,7 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3.0.1
         with:
           path: |
             ~/.gradle/caches
@@ -212,7 +212,7 @@ jobs:
         run: gu install native-image
 
       - name: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3.0.1
         with:
           path: ~/.gradle/caches
           key: gradle-${{ matrix.os }}-${{ hashFiles('build.gradle') }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
@@ -260,7 +260,7 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3.0.1
         with:
           path: |
             ~/.gradle/caches
@@ -317,7 +317,7 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
       - name: Cache Gradle packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3.0.1
         with:
           path: |
             ~/.gradle/caches
