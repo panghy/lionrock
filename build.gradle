@@ -12,7 +12,7 @@ allprojects {
     }
 
     ext {
-        set('springCloudVersion', "2021.0.0")
+        set('springCloudVersion', "2021.0.1")
         set('wavefrontVersion', "2.2.2")
     }
 }
@@ -28,6 +28,10 @@ subprojects {
         resolutionStrategy.eachDependency { details ->
             if ("io.grpc".equalsIgnoreCase(details.requested.group)) {
                 details.useVersion "1.44.1"
+            }
+            if ("com.google.guava".equalsIgnoreCase(details.requested.group) &&
+                    "guava".equalsIgnoreCase(details.requested.name)) {
+                details.useVersion "31.1-jre"
             }
         }
     }
