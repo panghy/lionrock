@@ -27,7 +27,7 @@ subprojects {
     configurations.all {
         resolutionStrategy.eachDependency { details ->
             if ("io.grpc".equalsIgnoreCase(details.requested.group)) {
-                details.useVersion "1.44.1"
+                details.useVersion "1.45.1"
             }
             if ("com.google.guava".equalsIgnoreCase(details.requested.group) &&
                     "guava".equalsIgnoreCase(details.requested.name)) {
