@@ -28,6 +28,7 @@ dependencies {
 
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
+    testImplementation(testFixtures(project(":lionrock-grpc-tests")))
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
