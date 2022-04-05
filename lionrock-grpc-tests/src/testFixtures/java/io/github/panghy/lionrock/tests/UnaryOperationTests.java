@@ -1,8 +1,7 @@
-package io.github.panghy.lionrock.foundationdb;
+package io.github.panghy.lionrock.tests;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
-import io.github.panghy.lionrock.tests.AbstractGrpcTest;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
