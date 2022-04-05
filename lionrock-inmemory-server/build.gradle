@@ -20,7 +20,6 @@ repositories {
 
 ext {
     set('springCloudVersion', "2021.0.0")
-    set('wavefrontVersion', "2.2.2")
 }
 
 configurations {
@@ -38,33 +37,21 @@ bootJar {
 dependencies {
     implementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'io.zipkin.brave:brave-instrumentation-grpc'
-
-    implementation 'com.wavefront:wavefront-spring-boot-starter'
 
     implementation('io.github.lognet:grpc-spring-boot-starter:4.6.0')
 
     implementation project(':lionrock-proto-java')
-    implementation(project(":lionrock-grpc-tests"))
-    implementation 'org.foundationdb:fdb-java:6.3.24'
 
-    testImplementation project(':lionrock-foundationdb-client')
-    testImplementation(testFixtures(project(":lionrock-grpc-tests")))
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
-    testImplementation 'org.junit.platform:junit-platform-suite'
-    testImplementation 'org.junit.platform:junit-platform-runner'
-
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 }
 
 dependencyManagement {
     imports {
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-        mavenBom "com.wavefront:wavefront-spring-boot-bom:${wavefrontVersion}"
     }
 }
 
@@ -83,8 +70,8 @@ publishing {
             from components.java
             artifact bootJar
             pom {
-                name = "lionrock-foundationdb-server"
-                description = "FoundationDB gRPC Server"
+                name = "lionrock-inmemory-server"
+                description = "Lionrock In-memory gRPC Server"
                 url = "https://github.com/panghy/lionrock"
                 licenses {
                     license {
@@ -107,7 +94,7 @@ publishing {
     repositories {
         maven {
             name = "OSSRH"
-            if(project.version.endsWith('-SNAPSHOT')) {
+            if (project.version.endsWith('-SNAPSHOT')) {
                 url "https://s01.oss.sonatype.org/content/repositories/snapshots/"
             } else {
                 url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
@@ -121,7 +108,7 @@ publishing {
 }
 
 javadoc {
-    if(JavaVersion.current().isJava9Compatible()) {
+    if (JavaVersion.current().isJava9Compatible()) {
         options.addBooleanOption('html5', true)
     }
 }

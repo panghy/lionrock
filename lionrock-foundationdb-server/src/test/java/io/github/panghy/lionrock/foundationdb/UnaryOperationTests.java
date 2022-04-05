@@ -2,6 +2,7 @@ package io.github.panghy.lionrock.foundationdb;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
+import io.github.panghy.lionrock.tests.AbstractGrpcTest;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -11,6 +12,7 @@ import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.lognet.springboot.grpc.autoconfigure.GRpcServerProperties;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.Resource;
 
 import java.io.IOException;
@@ -20,8 +22,10 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE;
 
-class UnaryOperationTests extends AbstractGrpcTest {
+@SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=0"})
+public class UnaryOperationTests extends AbstractGrpcTest {
 
   @BeforeEach
   public void setupChannel() throws IOException {

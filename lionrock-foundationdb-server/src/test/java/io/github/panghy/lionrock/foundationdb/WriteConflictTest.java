@@ -2,6 +2,7 @@ package io.github.panghy.lionrock.foundationdb;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
+import io.github.panghy.lionrock.tests.AbstractStreamingGrpcTest;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Test;
 
@@ -10,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class WriteConflictTest extends AbstractStreamingGrpcTest {
+public class WriteConflictTest extends AbstractStreamingGrpcTest {
 
   /**
    * To setup this test, we run two transactions, one performing a blind write against a range that was read first by

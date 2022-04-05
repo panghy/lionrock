@@ -14,6 +14,7 @@ allprojects {
     ext {
         set('springCloudVersion', "2021.0.1")
         set('wavefrontVersion', "2.2.2")
+        set('grpcVersion', "1.45.1")
     }
 }
 
@@ -27,7 +28,7 @@ subprojects {
     configurations.all {
         resolutionStrategy.eachDependency { details ->
             if ("io.grpc".equalsIgnoreCase(details.requested.group)) {
-                details.useVersion "1.45.1"
+                details.useVersion "${grpcVersion}"
             }
             if ("com.google.guava".equalsIgnoreCase(details.requested.group) &&
                     "guava".equalsIgnoreCase(details.requested.name)) {

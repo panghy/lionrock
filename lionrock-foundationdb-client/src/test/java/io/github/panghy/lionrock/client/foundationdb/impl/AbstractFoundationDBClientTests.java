@@ -5,7 +5,6 @@ import com.apple.foundationdb.KeySelector;
 import com.apple.foundationdb.KeyValue;
 import com.apple.foundationdb.Transaction;
 import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
-import io.github.panghy.lionrock.foundationdb.AbstractGrpcTest;
 import io.github.panghy.lionrock.foundationdb.FoundationDbGrpcFacade;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;

@@ -2,6 +2,7 @@ package io.github.panghy.lionrock.foundationdb;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
+import io.github.panghy.lionrock.tests.AbstractStreamingGrpcTest;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -13,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
-class WatchTest extends AbstractStreamingGrpcTest {
+public class WatchTest extends AbstractStreamingGrpcTest {
 
   @Captor
   ArgumentCaptor<StreamingDatabaseResponse> tx1aCapture;

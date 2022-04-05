@@ -22,7 +22,6 @@ import com.apple.foundationdb.record.query.plan.plans.RecordQueryPlan;
 import com.apple.foundationdb.record.sample.SampleProto;
 import com.google.common.base.Joiner;
 import com.google.protobuf.Message;
-import io.github.panghy.lionrock.foundationdb.AbstractGrpcTest;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
