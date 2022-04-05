@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.foundationdb;
+package io.github.panghy.lionrock;
 
 import com.apple.foundationdb.Database;
 import com.apple.foundationdb.FDB;
