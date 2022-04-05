@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.foundationdb;
+package io.github.panghy.lionrock.tests;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
+public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testStartTransaction_withValidDatabaseName() {

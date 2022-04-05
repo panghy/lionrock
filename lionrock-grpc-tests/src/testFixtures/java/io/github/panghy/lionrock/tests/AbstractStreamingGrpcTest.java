@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.foundationdb;
+package io.github.panghy.lionrock.tests;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
@@ -13,7 +13,7 @@ import static org.mockito.Mockito.*;
 
 public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
 
-  byte[] getKey(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, KeySelector keySelector) {
+  protected byte[] getKey(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, KeySelector keySelector) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
     StreamObserver<StreamingDatabaseRequest> serverStub;
     serverStub = stub.executeTransaction(streamObs);
@@ -39,8 +39,8 @@ public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
     return value.getGetKey().hasKey() ? value.getGetKey().getKey().toByteArray() : null;
   }
 
-  List<KeyValue> getRange(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
-                          KeySelector start, KeySelector end, int limit, boolean reverse) {
+  protected List<KeyValue> getRange(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                    KeySelector start, KeySelector end, int limit, boolean reverse) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamObserver<StreamingDatabaseRequest> serverStub;
@@ -73,8 +73,8 @@ public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
     return value.getGetRange().getKeyValuesList();
   }
 
-  long setKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
-                       byte[] key, byte[] value) {
+  protected long setKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                 byte[] key, byte[] value) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamingDatabaseResponse response;
@@ -119,8 +119,8 @@ public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
     return response.getCommitTransaction().getCommittedVersion();
   }
 
-  long clearKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
-                         byte[] key) {
+  protected long clearKeyAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                   byte[] key) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamingDatabaseResponse response;
@@ -152,8 +152,8 @@ public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
     return response.getCommitTransaction().getCommittedVersion();
   }
 
-  long clearRangeAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
-                           byte[] start, byte[] end) {
+  protected long clearRangeAndCommit(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                     byte[] start, byte[] end) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamingDatabaseResponse response;
@@ -186,7 +186,7 @@ public class AbstractStreamingGrpcTest extends AbstractGrpcTest {
     return response.getCommitTransaction().getCommittedVersion();
   }
 
-  String getValue(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, byte[] key) {
+  protected String getValue(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub, byte[] key) {
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamingDatabaseResponse value;

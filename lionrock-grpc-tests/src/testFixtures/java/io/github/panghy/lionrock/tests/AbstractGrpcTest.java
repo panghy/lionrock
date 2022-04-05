@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.foundationdb;
+package io.github.panghy.lionrock.tests;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.DatabaseResponse;
@@ -19,6 +19,7 @@ import org.mockito.Captor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.io.Resource;
 
 import java.io.IOException;
@@ -31,6 +32,7 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
  *
  * @author Clement Pang
  */
+@ComponentScan("io.github.panghy.lionrock")
 @SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=0"})
 public abstract class AbstractGrpcTest {
   @Autowired(required = false)
@@ -44,11 +46,11 @@ public abstract class AbstractGrpcTest {
   protected int runningPort;
 
   @Captor
-  ArgumentCaptor<StatusRuntimeException> statusRuntimeExceptionArgumentCaptor;
+  protected ArgumentCaptor<StatusRuntimeException> statusRuntimeExceptionArgumentCaptor;
   @Captor
-  ArgumentCaptor<StreamingDatabaseResponse> streamingDatabaseResponseCapture;
+  protected ArgumentCaptor<StreamingDatabaseResponse> streamingDatabaseResponseCapture;
   @Captor
-  ArgumentCaptor<DatabaseResponse> databaseResponseCapture;
+  protected ArgumentCaptor<DatabaseResponse> databaseResponseCapture;
 
   protected ManagedChannel channel;
 
@@ -79,11 +81,11 @@ public abstract class AbstractGrpcTest {
     return runningPort;
   }
 
-  KeySelector keySelector(byte[] key, int offset, boolean orEqual) {
+  protected KeySelector keySelector(byte[] key, int offset, boolean orEqual) {
     return KeySelector.newBuilder().setKey(ByteString.copyFrom(key)).setOffset(offset).setOrEqual(orEqual).build();
   }
 
-  KeySelector equals(byte[] key) {
+  protected KeySelector equals(byte[] key) {
     return KeySelector.newBuilder().setKey(ByteString.copyFrom(key)).setOffset(1).setOrEqual(false).build();
   }
 }

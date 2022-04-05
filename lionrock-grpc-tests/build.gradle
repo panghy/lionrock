@@ -1,0 +1,47 @@
+plugins {
+    id 'org.springframework.boot' version '2.6.6'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id 'java-library'
+    id 'java-test-fixtures'
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
+}
+
+sourceCompatibility = '11'
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('springCloudVersion', "2021.0.0")
+}
+
+dependencies {
+    testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
+    testFixturesImplementation 'org.springframework.boot:spring-boot-starter-actuator'
+    testFixturesImplementation 'io.zipkin.brave:brave-instrumentation-grpc'
+
+    testFixturesImplementation('io.github.lognet:grpc-spring-boot-starter:4.6.0')
+
+    testFixturesImplementation project(':lionrock-proto-java')
+    testFixturesImplementation 'org.foundationdb:fdb-java:6.3.24'
+
+    testFixturesImplementation project(':lionrock-foundationdb-client')
+    testFixturesImplementation project(":lionrock-grpc-tests")
+    testFixturesImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testFixturesImplementation 'org.junit.jupiter:junit-jupiter-api'
+
+    testFixturesRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+
+    testFixturesAnnotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}

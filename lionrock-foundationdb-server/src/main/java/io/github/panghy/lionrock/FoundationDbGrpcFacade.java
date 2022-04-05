@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.foundationdb;
+package io.github.panghy.lionrock;
 
 import com.apple.foundationdb.KeySelector;
 import com.apple.foundationdb.KeyValue;
