@@ -41,7 +41,9 @@ dependencies {
     implementation('io.github.lognet:grpc-spring-boot-starter:4.6.0')
 
     implementation project(':lionrock-proto-java')
+    implementation(project(":lionrock-grpc-tests"))
 
+    testImplementation(testFixtures(project(":lionrock-grpc-tests")))
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
