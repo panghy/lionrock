@@ -1,7 +1,8 @@
-package io.github.panghy.lionrock.tests;
+package io.github.panghy.lionrock.foundationdb;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
+import io.github.panghy.lionrock.tests.AbstractStreamingGrpcTest;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Test;
 
