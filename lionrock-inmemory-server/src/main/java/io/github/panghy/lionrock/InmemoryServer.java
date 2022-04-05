@@ -1,4 +1,4 @@
-package io.github.panghy.lionrock.inmemory;
+package io.github.panghy.lionrock;
 
 import io.github.panghy.lionrock.proto.TransactionalKeyValueStoreGrpc;
 import org.lognet.springboot.grpc.GRpcService;

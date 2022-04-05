@@ -5,5 +5,5 @@ import org.junit.platform.suite.api.Suite;
 
 @Suite
 @SelectPackages("io.github.panghy.lionrock.tests")
-public class GrpcTestSuite {
+public class FoundationDbServerGrpcTests {
 }
