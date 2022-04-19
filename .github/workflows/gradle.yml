@@ -43,12 +43,12 @@ jobs:
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
           BUILD_CACHE_PASSWORD: ${{ secrets.BUILD_CACHE_PASSWORD }}
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: lionrock-foundationdb-server
           path: 'lionrock-foundationdb-server/build/libs/lionrock-foundationdb-server-*.jar'
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: lionrock-cli
           path: 'lionrock-cli/build/libs'
@@ -230,7 +230,7 @@ jobs:
 
       # Uploads binary
       - name: upload ${{ matrix.os }} image
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: lionrock-cli-${{ matrix.os }}
           path: lionrock-cli/build/bin/lionrock-cli
