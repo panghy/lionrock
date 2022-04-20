@@ -35,7 +35,7 @@ dependencies {
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.20.0'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
-    testImplementation 'org.mockito:mockito-junit-jupiter:4.4.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:4.5.0'
 
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
