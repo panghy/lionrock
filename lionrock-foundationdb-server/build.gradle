@@ -45,7 +45,7 @@ dependencies {
     implementation('io.github.lognet:grpc-spring-boot-starter:4.7.0')
 
     implementation project(':lionrock-proto-java')
-    implementation 'org.foundationdb:fdb-java:6.3.24'
+    implementation 'org.foundationdb:fdb-java:7.1.3'
 
     testImplementation project(':lionrock-foundationdb-client')
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
