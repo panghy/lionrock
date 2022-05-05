@@ -26,11 +26,11 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.google.protobuf:protobuf-java:3.20.1'
-    protobuf 'com.google.protobuf:protobuf-java:3.20.1'
+    implementation 'com.google.protobuf:protobuf-java'
+    protobuf 'com.google.protobuf:protobuf-java'
 
-    implementation 'io.grpc:grpc-protobuf:1.46.0'
-    implementation 'io.grpc:grpc-stub:1.45.1'
+    implementation 'io.grpc:grpc-protobuf'
+    implementation 'io.grpc:grpc-stub'
     compileOnly 'org.apache.tomcat:annotations-api:6.0.53' // necessary for Java 9+
 }
 
@@ -44,11 +44,11 @@ sourceSets {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.20.1'
+        artifact = 'com.google.protobuf:protoc'
     }
     plugins {
         grpc {
-            artifact = 'io.grpc:protoc-gen-grpc-java:1.46.0'
+            artifact = 'io.grpc:protoc-gen-grpc-java'
         }
     }
     generateProtoTasks {

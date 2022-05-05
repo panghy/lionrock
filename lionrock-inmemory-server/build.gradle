@@ -32,6 +32,7 @@ configurations {
 
 bootJar {
     classifier = 'boot'
+    enabled = false
 }
 
 dependencies {

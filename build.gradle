@@ -14,7 +14,7 @@ allprojects {
     ext {
         set('springCloudVersion', "2021.0.1")
         set('wavefrontVersion', "2.2.2")
-        set('grpcVersion', "1.45.1")
+        set('grpcVersion', "1.46.0")
     }
 }
 
@@ -33,6 +33,13 @@ subprojects {
             if ("com.google.guava".equalsIgnoreCase(details.requested.group) &&
                     "guava".equalsIgnoreCase(details.requested.name)) {
                 details.useVersion "31.1-jre"
+            }
+            if ("org.foundationdb".equalsIgnoreCase(details.requested.group) &&
+                    "fdb-java".equalsIgnoreCase(details.requested.name)) {
+                details.useVersion "6.3.24"
+            }
+            if ("com.google.protobuf".equalsIgnoreCase(details.requested.group)) {
+                details.useVersion "3.20.1"
             }
         }
     }

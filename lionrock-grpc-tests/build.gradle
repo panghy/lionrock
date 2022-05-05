@@ -20,6 +20,10 @@ ext {
     set('springCloudVersion', "2021.0.0")
 }
 
+bootJar {
+    enabled = false
+}
+
 dependencies {
     testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -28,7 +32,7 @@ dependencies {
     testFixturesImplementation('io.github.lognet:grpc-spring-boot-starter:4.7.0')
 
     testFixturesImplementation project(':lionrock-proto-java')
-    testFixturesImplementation 'org.foundationdb:fdb-java:6.3.24'
+    testFixturesImplementation 'org.foundationdb:fdb-java'
 
     testFixturesImplementation project(':lionrock-foundationdb-client')
     testFixturesImplementation project(":lionrock-grpc-tests")
