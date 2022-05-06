@@ -292,7 +292,7 @@ jobs:
             type=sha
 
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: lionrock-foundationdb-server/
           push: ${{ github.event_name != 'pull_request' }}
@@ -349,7 +349,7 @@ jobs:
             type=sha
 
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: lionrock-foundationdb-server/
           file: lionrock-foundationdb-server/self_contained.Dockerfile
