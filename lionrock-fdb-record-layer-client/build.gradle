@@ -11,8 +11,7 @@ plugins {
 repositories {
     mavenCentral()
     maven {
-        name 'sonatype-snapshot'
-        url 'https://s01.oss.sonatype.org/content/repositories/snapshots'
+        url "https://ossartifacts.jfrog.io/artifactory/fdb-record-layer/"
     }
 }
 
@@ -21,8 +20,7 @@ bootJar {
 }
 
 dependencies {
-    // replace after refactoring https://github.com/FoundationDB/fdb-record-layer/pull/1344.
-    implementation 'io.github.panghy.foundationdb:fdb-record-layer-core-pb3:999.3.1-SNAPSHOT'
+    implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.1.256.0'
     implementation project(':lionrock-foundationdb-client')
     implementation 'io.grpc:grpc-stub'
 
