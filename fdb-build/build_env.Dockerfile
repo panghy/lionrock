@@ -2,7 +2,7 @@ FROM ubuntu:bionic
 
 # Install build tools
 RUN apt update
-RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt install -y build-essential git ninja-build libssl-dev libjemalloc-dev openjdk-8-jdk software-properties-common lsb-release libtool autoconf unzip wget gnupg ca-certificates gcc-8 g++-8
+RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt install -y build-essential git ninja-build libssl-dev libjemalloc-dev default-jdk software-properties-common lsb-release libtool autoconf unzip wget gnupg ca-certificates gcc-8 g++-8
 
 # Use GCC 8
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 700 --slave /usr/bin/g++ g++ /usr/bin/g++-7
