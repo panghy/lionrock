@@ -10,7 +10,6 @@ RUN git checkout 6.3.24
 WORKDIR /
 RUN mkdir fdb-build
 WORKDIR /fdb-build
-RUN apt install -y default-jdk
 RUN cmake -D CMAKE_CXX_FLAGS="-U_FORTIFY_SOURCE  " -G Ninja /fdb-src/foundationdb
 RUN ninja
 RUN cpack -G DEB
