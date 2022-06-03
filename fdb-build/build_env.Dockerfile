@@ -20,6 +20,5 @@ RUN echo "deb https://download.mono-project.com/repo/ubuntu stable-bionic main" 
 RUN apt update && apt install -y cmake mono-devel liblz4-dev
 RUN apt upgrade -y
 
-RUN export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
-RUN export CC=/usr/local/bin/gcc-8
-RUN export CXX=/usr/local/bin/g++-8
+RUN echo "export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:jre/bin/java::")" >> ~/.bashrc
+RUN echo "export CC=/usr/local/bin/gcc-8; export CXX=/usr/local/bin/g++-8" >> ~/.bashrc
