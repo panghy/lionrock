@@ -21,4 +21,4 @@ RUN apt update && apt install -y cmake mono-devel liblz4-dev
 RUN apt upgrade -y
 
 RUN echo "export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:jre/bin/java::")" >> ~/.bashrc
-RUN echo "export CC=/usr/local/bin/gcc-8; export CXX=/usr/local/bin/g++-8" >> ~/.bashrc
+RUN echo "export CC=/usr/bin/gcc-8; export CXX=/usr/bin/g++-8" >> ~/.bashrc
