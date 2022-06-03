@@ -1,29 +1,20 @@
+FROM clementpang/foundationdb_built:6.3.24 as built_fdb
+
 FROM adoptopenjdk/openjdk11:latest
 
 RUN apt-get update && \
-	apt-get install -y curl>=7.58.0-2ubuntu3.6 \
-	    wget \
-		dnsutils>=1:9.11.3+dfsg-1ubuntu1.7 \
-		lsof>=4.89+dfsg-0.1 \
-		tcptraceroute>=1.5beta7+debian-4build1 \
-		telnet>=0.17-41 \
-		netcat>=1.10-41.1 \
-		strace>=4.21-1ubuntu1 \
-		tcpdump>=4.9.3-0ubuntu0.18.04.1 \
-		less>=487-0.1 \
-		vim>=2:8.0.1453-1ubuntu1.4 \
-		net-tools>=1.60+git20161116.90da8a0-1ubuntu1 \
-		jq>=1.5+dfsg-2 && \
+	apt-get install -y curl wget dnsutils lsof tcptraceroute telnet netcat strace tcpdump less vim net-tools jq && \
 	rm -rf /var/lib/apt/lists/*
 
 WORKDIR /
 
-RUN wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-RUN wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-server_6.3.23-1_amd64.deb
-RUN dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
-RUN dpkg -i foundationdb-server_6.3.23-1_amd64.deb
-RUN rm foundationdb-clients_6.3.23-1_amd64.deb
-RUN rm foundationdb-server_6.3.23-1_amd64.deb
+COPY --from=built_fdb /fdb-build/packages/foundationdb-clients*.deb foundationdb-clients.deb
+COPY --from=built_fdb /fdb-build/packages/foundationdb-server*.deb foundationdb-server.deb
+COPY --from=built_fdb /fdb-build/packages/libfdb_java.so libfdb_java.so
+RUN dpkg -i foundationdb-clients.deb
+RUN dpkg -i foundationdb-server.deb
+RUN rm foundationdb-clients.deb
+RUN rm foundationdb-server.deb
 
 RUN mkdir -p /var/fdb/logs
 
@@ -34,4 +25,4 @@ COPY ${JAR_FILE} app.jar
 
 EXPOSE 6565
 
-CMD service foundationdb start; java -jar app.jar
+CMD service foundationdb start; java -DFDB_LIBRARY_PATH_FDB_JAVA=/libfdb_java.so -jar app.jar
