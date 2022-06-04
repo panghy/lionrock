@@ -32,7 +32,7 @@ dependencies {
     implementation project(':lionrock-proto-java')
     implementation 'org.foundationdb:fdb-java'
     implementation 'io.grpc:grpc-stub'
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: "3.20.1"
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: "3.21.1"
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:4.5.1'
