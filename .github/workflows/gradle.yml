@@ -352,6 +352,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: lionrock-foundationdb-server/
+          platforms: linux/amd64,linux/arm64
           file: lionrock-foundationdb-server/self_contained.Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
