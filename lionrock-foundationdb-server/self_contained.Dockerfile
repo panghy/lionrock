@@ -10,7 +10,7 @@ WORKDIR /
 
 COPY --from=built_fdb /fdb-build/packages/foundationdb-clients*.deb foundationdb-clients.deb
 COPY --from=built_fdb /fdb-build/packages/foundationdb-server*.deb foundationdb-server.deb
-COPY --from=built_fdb /fdb-build/packages/libfdb_java.so libfdb_java.so
+COPY --from=built_fdb /fdb-build/packages/lib/libfdb_java.so libfdb_java.so
 RUN dpkg -i foundationdb-clients.deb
 RUN dpkg -i foundationdb-server.deb
 RUN rm foundationdb-clients.deb
