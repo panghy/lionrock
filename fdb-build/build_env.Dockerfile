@@ -2,7 +2,23 @@ FROM ubuntu:bionic
 
 # Install build tools
 RUN apt update
-RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt install -y build-essential git ninja-build libssl-dev libjemalloc-dev default-jdk software-properties-common lsb-release libtool autoconf unzip wget gnupg ca-certificates gcc-8 g++-8
+RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt install -y  \
+    build-essential \
+    git \
+    ninja-build \
+    libssl-dev \
+    libjemalloc-dev \
+    default-jdk  \
+    software-properties-common  \
+    lsb-release  \
+    libtool  \
+    autoconf  \
+    unzip  \
+    wget  \
+    gnupg  \
+    ca-certificates  \
+    gcc-8  \
+    g++-8
 
 # Use GCC 8
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 700 --slave /usr/bin/g++ g++ /usr/bin/g++-7
@@ -18,7 +34,7 @@ RUN echo "deb https://download.mono-project.com/repo/ubuntu stable-bionic main" 
 
 # Install cmake and mono
 RUN apt update && apt install -y cmake mono-devel liblz4-dev
-RUN apt upgrade -y
+RUN rm -rf /var/lib/apt/lists/*
 
 RUN echo "export JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")" >> ~/.bashrc
 RUN echo "export CC=/usr/bin/gcc-8; export CXX=/usr/bin/g++-8" >> ~/.bashrc
