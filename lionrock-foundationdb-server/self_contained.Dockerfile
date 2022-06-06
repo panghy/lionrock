@@ -1,4 +1,4 @@
-FROM clementpang/foundationdb_built:6.3.24 as built_fdb
+FROM clementpang/foundationdb_built:7.1.6 as built_fdb
 
 FROM adoptopenjdk/openjdk11:latest
 
