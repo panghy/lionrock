@@ -289,6 +289,7 @@ jobs:
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha
 
       - name: Build and push
@@ -303,19 +304,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 512
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
       - name: Checkout
         uses: actions/checkout@v3
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
+        id: buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to DockerHub
         uses: docker/login-action@v2
@@ -354,15 +348,16 @@ jobs:
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha
 
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
+          builder: ${{ steps.buildx.outputs.name }}
           context: lionrock-foundationdb-server/
           platforms: linux/amd64,linux/arm64
           file: lionrock-foundationdb-server/self_contained.Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          no-cache: true
