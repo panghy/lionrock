@@ -1,10 +1,8 @@
-FROM clementpang/foundationdb_built:6.3.24 as built_fdb
+ARG FDB_VERSION=6.3.24
 
-FROM adoptopenjdk/openjdk11:latest
+FROM clementpang/foundationdb_binaries:${FDB_VERSION} as built_fdb
 
-RUN apt-get update && \
-	apt-get install -y curl wget dnsutils lsof tcptraceroute telnet netcat strace tcpdump less vim net-tools jq && \
-	rm -rf /var/lib/apt/lists/*
+FROM clementpang/lionrock-foundationdb-base:latest
 
 WORKDIR /
 
