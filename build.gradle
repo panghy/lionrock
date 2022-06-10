@@ -12,7 +12,7 @@ allprojects {
     }
 
     ext {
-        set('springCloudVersion', "2021.0.1")
+        set('springCloudVersion', "2021.0.3")
         set('wavefrontVersion', "2.2.2")
         set('grpcVersion', "1.46.0")
     }
