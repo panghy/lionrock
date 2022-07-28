@@ -20,7 +20,7 @@ bootJar {
 }
 
 dependencies {
-    implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.1.256.0'
+    implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.2.284.0'
     implementation project(':lionrock-foundationdb-client')
     implementation 'io.grpc:grpc-stub'
 
