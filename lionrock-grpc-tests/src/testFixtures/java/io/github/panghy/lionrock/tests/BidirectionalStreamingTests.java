@@ -21,8 +21,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testStartTransaction_withValidDatabaseName() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     StreamingDatabaseRequest request = StreamingDatabaseRequest.newBuilder().
         setStartTransaction(StartTransactionRequest.newBuilder().
             setName("testStartTransaction_withValidDatabaseName").
@@ -40,8 +38,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testStartTransaction_withInvalidDatabaseName() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     StreamingDatabaseRequest request = StreamingDatabaseRequest.newBuilder().
         setStartTransaction(StartTransactionRequest.newBuilder().
             setName("testStartTransaction_withInvalidDatabaseName").
@@ -62,8 +58,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testStartTransaction_cannotStartTwice() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     StreamingDatabaseRequest request = StreamingDatabaseRequest.newBuilder().
         setStartTransaction(StartTransactionRequest.newBuilder().
             setName("testStartTransaction_cannotStartTwice").
@@ -85,9 +79,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testStartTransaction_commitWithNothing() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
     StreamObserver<StreamingDatabaseRequest> streamingDatabaseRequestStreamObserver = stub.executeTransaction(streamObs);
     streamingDatabaseRequestStreamObserver.onNext(StreamingDatabaseRequest.newBuilder().
@@ -112,9 +103,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testSetValue() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     // set hello to world
     long lastCommittedVersion = setKeyAndCommit(stub,
         "hello".getBytes(StandardCharsets.UTF_8),
@@ -144,9 +132,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
   @Disabled
   @Test
   void testReadAndTimeout() throws InterruptedException {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamObserver<StreamingDatabaseRequest> serverStub;
@@ -187,9 +172,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testClearKey() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] helloB = "hello".getBytes(StandardCharsets.UTF_8);
     byte[] worldB = "world".getBytes(StandardCharsets.UTF_8);
     setKeyAndCommit(stub, helloB, worldB);
@@ -201,8 +183,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testClearRange() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
 
     setupRangeTest(stub);
 
@@ -222,9 +202,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_explicitStartEnd() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfterHello
@@ -247,9 +224,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_firstGreaterThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfter hello
@@ -268,9 +242,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_firstGreaterThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfterOrEqual to Hello
@@ -293,9 +264,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_lastLessThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThanOrEqual "hello"
@@ -318,9 +286,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_lastLessThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThan hello0 which is hello.
@@ -343,9 +308,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_firstGreaterThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfter hello2
@@ -368,9 +330,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_firstGreaterThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfterOrEqual to Hello
@@ -393,9 +352,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_lastLessThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThanOrEqual "hello"
@@ -418,9 +374,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_lastLessThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThan hello3 which is hello2.
@@ -439,9 +392,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testLargeGetRange() throws InterruptedException {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello10000".getBytes(StandardCharsets.UTF_8));
 
@@ -528,9 +478,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testInvalidGetRangeWithExact() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamObserver<StreamingDatabaseRequest> serverStub;
@@ -562,8 +509,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testEmptyRangeRead() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
 
@@ -591,9 +536,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   void testSetValue_andGetVersionstamp() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamingDatabaseResponse response;
@@ -632,9 +574,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_firstGreaterThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     setupRangeTest(stub);
 
     // firstAfter hello
@@ -644,8 +583,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_firstGreaterThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     // firstAfterOrEqual to Hello
@@ -655,8 +592,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_lastLessThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     // lastLessThanOrEqual "hello"
@@ -669,8 +604,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_lastLessThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     // lastLessThan hello0 which is hello.
@@ -683,9 +616,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetReadVersion() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
 
     StreamObserver<StreamingDatabaseRequest> serverStub;
@@ -712,8 +642,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetEstimateRangeSize() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
@@ -747,8 +675,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetBoundaryKeys() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
@@ -782,8 +708,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testGetAddressesForKey() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     StreamObserver<StreamingDatabaseResponse> streamObs = mock(StreamObserver.class);
@@ -815,9 +739,6 @@ public class BidirectionalStreamingTests extends AbstractStreamingGrpcTest {
 
   @Test
   public void testBatchedMutations() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello6".getBytes(StandardCharsets.UTF_8));
 

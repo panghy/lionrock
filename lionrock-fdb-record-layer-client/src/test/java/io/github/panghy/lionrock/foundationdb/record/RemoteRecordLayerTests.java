@@ -303,7 +303,7 @@ public class RemoteRecordLayerTests extends AbstractGrpcTest {
   @BeforeEach
   public void setupConnection() {
     logger.info("setupConnection()");
-    RemoteFDBDatabaseFactory factory = new RemoteFDBDatabaseFactory(channel, "RemoteRecordLayerTests");
+    RemoteFDBDatabaseFactory factory = new RemoteFDBDatabaseFactory(stub, "RemoteRecordLayerTests");
     this.fdb = factory.getDatabase();
     this.fdb.setAsyncToSyncExceptionMapper((ex, event) -> {
       if (ex instanceof ExecutionException || ex instanceof CompletionException) {

@@ -4,6 +4,5 @@ include 'lionrock-foundationdb-server'
 include 'lionrock-foundationdb-client'
 include 'lionrock-cli'
 include 'lionrock-fdb-record-layer-client'
-include 'lionrock-inmemory-server'
 include 'lionrock-grpc-tests'
 
