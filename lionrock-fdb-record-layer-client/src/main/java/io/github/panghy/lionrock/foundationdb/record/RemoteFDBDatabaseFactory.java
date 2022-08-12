@@ -6,6 +6,7 @@ import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory;
 import com.apple.foundationdb.record.provider.foundationdb.FDBLocalityProvider;
 import com.apple.foundationdb.record.provider.foundationdb.FDBTraceFormat;
 import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
+import io.github.panghy.lionrock.proto.TransactionalKeyValueStoreGrpc;
 import io.grpc.ManagedChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +25,7 @@ public class RemoteFDBDatabaseFactory extends FDBDatabaseFactory {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(RemoteFDBDatabaseFactory.class);
 
-  private final ManagedChannel channel;
+  private final TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub;
   private final String clientIdentifier;
   /**
    * The default is a log-based predicate, which can also be used to enable tracing on a more granular level
@@ -43,13 +44,24 @@ public class RemoteFDBDatabaseFactory extends FDBDatabaseFactory {
    * @param clientIdentifier The client identifier when communicating with the server.
    */
   public RemoteFDBDatabaseFactory(ManagedChannel channel, String clientIdentifier) {
-    this.channel = channel;
+    this.stub = TransactionalKeyValueStoreGrpc.newStub(channel);
+    this.clientIdentifier = clientIdentifier;
+  }
+
+  /**
+   * Create a new {@link RemoteFDBDatabaseFactory}.
+   *
+   * @param stub             The {@link io.github.panghy.lionrock.proto.TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub} to use.
+   * @param clientIdentifier The client identifier when communicating with the server.
+   */
+  public RemoteFDBDatabaseFactory(TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub,
+                                  String clientIdentifier) {
+    this.stub = stub;
     this.clientIdentifier = clientIdentifier;
   }
 
   @Override
   public void shutdown() {
-    channel.shutdown();
   }
 
   @Override
@@ -118,6 +130,6 @@ public class RemoteFDBDatabaseFactory extends FDBDatabaseFactory {
     if (databaseName == null) {
       databaseName = "fdb";
     }
-    return RemoteFoundationDBDatabaseFactory.open(databaseName, clientIdentifier, channel);
+    return RemoteFoundationDBDatabaseFactory.open(databaseName, clientIdentifier, stub);
   }
 }

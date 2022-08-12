@@ -56,7 +56,7 @@ public class RemoteFoundationDBDatabaseFactory {
   public static Database open(String databaseName,
                               String clientIdentifier,
                               ManagedChannel channel) {
-    return new RemoteDatabase(databaseName, clientIdentifier, DEFAULT_EXECUTOR,
+    return open(databaseName, clientIdentifier, DEFAULT_EXECUTOR,
         TransactionalKeyValueStoreGrpc.newStub(channel));
   }
 
@@ -73,7 +73,37 @@ public class RemoteFoundationDBDatabaseFactory {
                               String clientIdentifier,
                               Executor executor,
                               ManagedChannel channel) {
-    return new RemoteDatabase(databaseName, clientIdentifier, executor,
+    return open(databaseName, clientIdentifier, executor,
         TransactionalKeyValueStoreGrpc.newStub(channel));
+  }
+
+  /**
+   * Open a connection to a remote transactional, key-value store via gRPC.
+   *
+   * @param databaseName     The database to open (must exist on the remote end).
+   * @param clientIdentifier The client identifier.
+   * @param stub             The {@link TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub} to use.
+   * @return A {@link io.github.panghy.lionrock.client.foundationdb.impl.RemoteDatabase}.
+   */
+  public static Database open(String databaseName,
+                              String clientIdentifier,
+                              TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
+    return open(databaseName, clientIdentifier, DEFAULT_EXECUTOR, stub);
+  }
+
+  /**
+   * Open a connection to a remote transactional, key-value store via gRPC.
+   *
+   * @param databaseName     The database to open (must exist on the remote end).
+   * @param clientIdentifier The client identifier.
+   * @param executor         The executor to use.
+   * @param stub             The {@link TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub} to use.
+   * @return A {@link io.github.panghy.lionrock.client.foundationdb.impl.RemoteDatabase}.
+   */
+  public static Database open(String databaseName,
+                              String clientIdentifier,
+                              Executor executor,
+                              TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub) {
+    return new RemoteDatabase(databaseName, clientIdentifier, executor, stub);
   }
 }

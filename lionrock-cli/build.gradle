@@ -62,6 +62,7 @@ dependencies {
     implementation 'io.grpc:grpc-okhttp'
 
     implementation project(':lionrock-foundationdb-client')
+    implementation project(':lionrock-proto-java')
     implementation 'org.foundationdb:fdb-java'
     implementation 'info.picocli:picocli-shell-jline3:4.6.3'
     implementation 'org.jline:jline-terminal-jansi:3.21.0'
