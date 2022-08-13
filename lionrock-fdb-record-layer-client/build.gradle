@@ -20,10 +20,12 @@ bootJar {
 }
 
 dependencies {
-    implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.1.256.0'
     implementation project(':lionrock-foundationdb-client')
     implementation project(':lionrock-proto-java')
-    implementation 'io.grpc:grpc-stub'
+    implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.1.256.0'
+    implementation 'com.google.protobuf:protobuf-java:3.21.1'
+    implementation 'org.foundationdb:fdb-java:6.3.24'
+    implementation 'io.grpc:grpc-stub:1.48.0'
 
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'tests')
@@ -31,7 +33,6 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.springframework.cloud:spring-cloud-starter-sleuth'
-    testRuntimeOnly('io.github.lognet:grpc-spring-boot-starter:4.8.0')
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
@@ -81,7 +82,7 @@ publishing {
     repositories {
         maven {
             name = "OSSRH"
-            if(project.version.endsWith('-SNAPSHOT')) {
+            if (project.version.endsWith('-SNAPSHOT')) {
                 url "https://s01.oss.sonatype.org/content/repositories/snapshots/"
             } else {
                 url "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
@@ -95,7 +96,7 @@ publishing {
 }
 
 javadoc {
-    if(JavaVersion.current().isJava9Compatible()) {
+    if (JavaVersion.current().isJava9Compatible()) {
         options.addBooleanOption('html5', true)
     }
 }
@@ -107,6 +108,6 @@ signing {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc'
+        artifact = 'com.google.protobuf:protoc:3.21.1'
     }
 }

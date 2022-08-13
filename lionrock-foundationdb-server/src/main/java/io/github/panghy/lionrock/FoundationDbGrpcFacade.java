@@ -19,7 +19,7 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-import org.lognet.springboot.grpc.GRpcService;
+import net.devh.boot.grpc.server.service.GrpcService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,19 +45,19 @@ import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 @SpringBootApplication
-@GRpcService
+@GrpcService
 @Component
 public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreImplBase {
 
   Logger logger = LoggerFactory.getLogger(FoundationDbGrpcFacade.class);
 
   @Autowired
-  Configuration config;
+  LionrockConfiguration config;
   @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
   @Autowired
   Tracer tracer;
 
-  Map<String, Configuration.Cluster> clusterMap = new HashMap<>();
+  Map<String, LionrockConfiguration.Cluster> clusterMap = new HashMap<>();
   Map<String, Database> databaseMap = new HashMap<>();
 
   @PostConstruct
@@ -66,7 +66,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         "(FDB API Version: " + config.getFdbVersion() + ")");
     FDB.selectAPIVersion(config.getFdbVersion());
     List<CompletableFuture<?>> readVersionCFs = new ArrayList<>(config.getClusters().size());
-    for (Configuration.Cluster cluster : config.getClusters()) {
+    for (LionrockConfiguration.Cluster cluster : config.getClusters()) {
       clusterMap.put(cluster.getName(), cluster);
       Database fdb = FDB.instance().open(cluster.getClusterFile());
       if (cluster.isCheckOnStartup()) {
@@ -119,7 +119,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
   }
 
   private CompletableFuture<Long> getReadVersionOrLog(
-      Configuration.Cluster cluster, Database fdb, AtomicLong start) {
+      LionrockConfiguration.Cluster cluster, Database fdb, AtomicLong start) {
     return getReadVersionWithTimeout(fdb).exceptionally(ex -> {
       logger.warn("Cluster: " + cluster.getName() + " with file: " + cluster.getClusterFile() +
           " failed to get read version after" + (System.currentTimeMillis() - start.get()) + "ms", ex);
@@ -1291,7 +1291,7 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
 
       /**
        * Use asList() with range gets (only enabled via
-       * {@link Configuration.InternalOptions#isUseAsListForRangeGets()}.
+       * {@link LionrockConfiguration.InternalOptions#isUseAsListForRangeGets()}.
        * <p>
        * Normally, calls are routed to
        * {@link #handleRangeGetWithAsyncIterator(StreamingDatabaseRequest, GetRangeRequest, Span, KeySelector, KeySelector, AsyncIterable)}

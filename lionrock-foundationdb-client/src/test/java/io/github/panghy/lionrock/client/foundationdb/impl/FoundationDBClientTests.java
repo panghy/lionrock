@@ -55,7 +55,7 @@ public class FoundationDBClientTests extends AbstractFoundationDBClientTests {
 
   @Test
   void testStartTransaction_withInvalidDatabaseName() {
-    Database database = RemoteFoundationDBDatabaseFactory.open("INVALID", "integration test", channel);
+    Database database = RemoteFoundationDBDatabaseFactory.open("INVALID", "integration test", stub);
     try {
       database.runAsync(ReadTransaction::getReadVersion).join();
       fail();

@@ -28,3 +28,8 @@ wavefront:
   application:
     name: lionrock
     service: fdb-facade
+
+grpc:
+  server:
+    port: 6565
+    reflection-service-enabled: true

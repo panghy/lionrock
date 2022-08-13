@@ -18,8 +18,6 @@ public class WriteConflictTest extends AbstractStreamingGrpcTest {
    */
   @Test
   public void testWriteConflict() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     // clear hello -> hello4
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
@@ -72,8 +70,6 @@ public class WriteConflictTest extends AbstractStreamingGrpcTest {
    */
   @Test
   public void testAddReadConflictRange() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     // clear hello -> hello4
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
@@ -129,8 +125,6 @@ public class WriteConflictTest extends AbstractStreamingGrpcTest {
    */
   @Test
   public void testAddReadConflictKey() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     // clear hello -> hello4
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
@@ -178,8 +172,6 @@ public class WriteConflictTest extends AbstractStreamingGrpcTest {
 
   @Test
   public void testAddWriteConflictRange() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     // clear hello -> hello4
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
@@ -254,8 +246,6 @@ public class WriteConflictTest extends AbstractStreamingGrpcTest {
 
   @Test
   public void testAddWriteConflictKey() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     // clear hello -> hello4
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));

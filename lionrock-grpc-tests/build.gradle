@@ -21,17 +21,18 @@ bootJar {
 }
 
 dependencies {
+    testFixturesImplementation project(':lionrock-proto-java')
+    testFixturesImplementation project(':lionrock-foundationdb-client')
+    testFixturesImplementation project(":lionrock-grpc-tests")
+    testFixturesImplementation 'com.google.protobuf:protobuf-java:3.21.1'
+    testFixturesImplementation('io.grpc:grpc-api:1.48.0')
+    testFixturesImplementation('io.grpc:grpc-stub:1.48.0')
+    testFixturesImplementation('net.devh:grpc-spring-boot-starter:2.13.1.RELEASE')
+
     testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-actuator'
     testFixturesImplementation 'io.zipkin.brave:brave-instrumentation-grpc'
 
-    testFixturesImplementation('io.github.lognet:grpc-spring-boot-starter:4.8.0')
-
-    testFixturesImplementation project(':lionrock-proto-java')
-    testFixturesImplementation 'org.foundationdb:fdb-java'
-
-    testFixturesImplementation project(':lionrock-foundationdb-client')
-    testFixturesImplementation project(":lionrock-grpc-tests")
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-test'
     testFixturesImplementation 'org.junit.jupiter:junit-jupiter-api'
 

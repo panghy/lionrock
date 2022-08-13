@@ -2,53 +2,21 @@ package io.github.panghy.lionrock.tests;
 
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.proto.*;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.lognet.springboot.grpc.autoconfigure.GRpcServerProperties;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.core.io.Resource;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE;
 
-@SpringBootTest(webEnvironment = NONE, properties = {"grpc.port=0", "grpc.shutdownGrace=0"})
 public class UnaryOperationTests extends AbstractGrpcTest {
-
-  @BeforeEach
-  public void setupChannel() throws IOException {
-    if (gRpcServerProperties.isEnabled()) {
-      ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress("localhost", getPort());
-      Resource certChain = Optional.ofNullable(gRpcServerProperties.getSecurity()).
-          map(GRpcServerProperties.SecurityProperties::getCertChain).
-          orElse(null);
-      if (null != certChain) {
-        ((NettyChannelBuilder) channelBuilder).
-            useTransportSecurity().
-            sslContext(GrpcSslContexts.forClient().trustManager(certChain.getInputStream()).build());
-      } else {
-        channelBuilder.usePlaintext();
-      }
-      channel = channelBuilder.build();
-    }
-  }
 
   @Test
   void testStartTransaction_withInvalidDatabaseName() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
     stub.execute(DatabaseRequest.newBuilder().setName("testStartTransaction_withInvalidDatabaseName").
         setClientIdentifier("unit test").
@@ -62,9 +30,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   void testSetValue() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     // set hello to world
     setKeyAndCommit(stub,
         "hello".getBytes(StandardCharsets.UTF_8),
@@ -84,9 +49,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   void testClearKey() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] helloB = "hello".getBytes(StandardCharsets.UTF_8);
     byte[] worldB = "world".getBytes(StandardCharsets.UTF_8);
     setKeyAndCommit(stub, helloB, worldB);
@@ -98,9 +60,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   void testClearRange() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     setupRangeTest(stub);
 
     assertEquals("world", getValue(stub, "hello".getBytes(StandardCharsets.UTF_8)));
@@ -119,9 +78,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_explicitStartEnd() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfterHello
@@ -144,9 +100,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_firstGreaterThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfter hello
@@ -165,9 +118,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_firstGreaterThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfterOrEqual to Hello
@@ -190,9 +140,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_lastLessThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThanOrEqual "hello"
@@ -215,9 +162,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorStart_lastLessThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThan hello0 which is hello.
@@ -240,9 +184,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_firstGreaterThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfter hello2
@@ -265,9 +206,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_firstGreaterThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // firstAfterOrEqual to Hello
@@ -290,9 +228,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_lastLessThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThanOrEqual "hello"
@@ -315,9 +250,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetRange_keyselectorEnd_lastLessThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     byte[] worldB = setupRangeTest(stub);
 
     // lastLessThan hello3 which is hello2.
@@ -336,8 +268,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testInvalidRangeGetWithExact() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
 
     stub.execute(DatabaseRequest.newBuilder().
@@ -356,9 +286,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_firstGreaterThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
-
     setupRangeTest(stub);
 
     // firstAfter hello
@@ -368,8 +295,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_firstGreaterThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     // firstAfterOrEqual to Hello
@@ -379,8 +304,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_lastLessThanOrEqual() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     // lastLessThanOrEqual "hello"
@@ -393,8 +316,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetKey_keyselectorStart_lastLessThan() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     // lastLessThan hello0 which is hello.
@@ -407,8 +328,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetEstimateRangeSize() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
@@ -432,8 +351,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetBoundaryKeys() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);
@@ -457,8 +374,6 @@ public class UnaryOperationTests extends AbstractGrpcTest {
 
   @Test
   public void testGetAddressesForKey() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     setupRangeTest(stub);
 
     StreamObserver<DatabaseResponse> streamObs = mock(StreamObserver.class);

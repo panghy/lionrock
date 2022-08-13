@@ -26,8 +26,6 @@ public class WatchTest extends AbstractStreamingGrpcTest {
    */
   @Test
   public void testWatch() {
-    TransactionalKeyValueStoreGrpc.TransactionalKeyValueStoreStub stub =
-        TransactionalKeyValueStoreGrpc.newStub(channel);
     // clear hello -> hello4
     clearRangeAndCommit(stub, "hello".getBytes(StandardCharsets.UTF_8),
         "hello4".getBytes(StandardCharsets.UTF_8));
