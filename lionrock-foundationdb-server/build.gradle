@@ -1,6 +1,6 @@
 plugins {
     id 'org.springframework.boot' version '2.7.2'
-    id 'io.spring.dependency-management' version '1.0.12.RELEASE'
+    id 'io.spring.dependency-management' version '1.0.13.RELEASE'
     id 'java'
     id 'maven-publish'
     id 'jacoco'
@@ -45,7 +45,7 @@ dependencies {
     implementation 'com.wavefront:wavefront-spring-boot-starter'
 
     implementation 'net.devh:grpc-spring-boot-starter:2.13.1.RELEASE'
-    implementation 'io.grpc:grpc-netty-shaded:1.48.0'
+    implementation 'io.grpc:grpc-netty-shaded:1.48.1'
 
     testImplementation project(':lionrock-foundationdb-client')
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
