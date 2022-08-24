@@ -45,7 +45,7 @@ dependencies {
     implementation 'com.wavefront:wavefront-spring-boot-starter'
 
     implementation 'net.devh:grpc-spring-boot-starter:2.13.1.RELEASE'
-    implementation 'io.grpc:grpc-netty-shaded:1.48.0'
+    implementation 'io.grpc:grpc-netty-shaded:1.49.0'
 
     testImplementation project(':lionrock-foundationdb-client')
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
