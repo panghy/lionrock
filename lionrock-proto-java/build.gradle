@@ -26,7 +26,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.google.protobuf:protobuf-java:3.21.1'
+    implementation 'com.google.protobuf:protobuf-java:3.21.5'
     implementation 'com.google.guava:guava:31.1-jre'
     implementation('io.grpc:grpc-protobuf:1.49.0')
     implementation('io.grpc:grpc-stub:1.48.0')

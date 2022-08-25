@@ -39,7 +39,7 @@ dependencies {
     implementation 'io.zipkin.brave:brave-instrumentation-grpc'
     implementation 'org.foundationdb:fdb-java:6.3.24'
 
-    implementation 'com.google.protobuf:protobuf-java:3.21.1'
+    implementation 'com.google.protobuf:protobuf-java:3.21.5'
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
 
     implementation 'com.wavefront:wavefront-spring-boot-starter'
