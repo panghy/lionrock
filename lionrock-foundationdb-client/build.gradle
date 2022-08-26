@@ -31,9 +31,9 @@ repositories {
 dependencies {
     implementation project(':lionrock-proto-java')
     implementation 'org.foundationdb:fdb-java:6.3.24'
-    implementation('io.grpc:grpc-stub:1.48.0')
-    implementation('io.grpc:grpc-api:1.48.0')
-    implementation 'com.google.protobuf:protobuf-java:3.21.1'
+    implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "io.grpc:grpc-api:${grpcVersion}"
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
     implementation 'com.google.guava:guava:31.1-jre'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.7.0'

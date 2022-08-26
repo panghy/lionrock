@@ -39,17 +39,17 @@ dependencies {
     implementation 'io.zipkin.brave:brave-instrumentation-grpc'
     implementation 'org.foundationdb:fdb-java:6.3.24'
 
-    implementation 'com.google.protobuf:protobuf-java:3.21.1'
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
 
     implementation 'com.wavefront:wavefront-spring-boot-starter'
 
     implementation 'net.devh:grpc-spring-boot-starter:2.13.1.RELEASE'
-    implementation 'io.grpc:grpc-netty-shaded:1.49.0'
+    implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
 
     testImplementation project(':lionrock-foundationdb-client')
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
-    testImplementation 'io.grpc:grpc-testing'
+    testImplementation "io.grpc:grpc-testing:${grpcVersion}"
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testImplementation 'org.junit.platform:junit-platform-suite'

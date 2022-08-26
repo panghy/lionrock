@@ -15,7 +15,8 @@ allprojects {
     ext {
         set('springCloudVersion', "2021.0.3")
         set('wavefrontVersion', "2.2.2")
-        set('grpcVersion', "1.48.0")
+        set('grpcVersion', "1.49.0")
+        set('protobufVersion', "3.21.1")
     }
 }
 

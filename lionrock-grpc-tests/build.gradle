@@ -24,9 +24,9 @@ dependencies {
     testFixturesImplementation project(':lionrock-proto-java')
     testFixturesImplementation project(':lionrock-foundationdb-client')
     testFixturesImplementation project(":lionrock-grpc-tests")
-    testFixturesImplementation 'com.google.protobuf:protobuf-java:3.21.1'
-    testFixturesImplementation('io.grpc:grpc-api:1.48.0')
-    testFixturesImplementation('io.grpc:grpc-stub:1.48.0')
+    testFixturesImplementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    testFixturesImplementation "io.grpc:grpc-api:${grpcVersion}"
+    testFixturesImplementation "io.grpc:grpc-stub:${grpcVersion}"
     testFixturesImplementation('net.devh:grpc-spring-boot-starter:2.13.1.RELEASE')
 
     testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
