@@ -12,6 +12,7 @@ on:
 
 jobs:
   build:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -62,6 +63,7 @@ jobs:
           rm -f ~/.gradle/caches/modules-2/gc.properties
 
   test:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -141,6 +143,7 @@ jobs:
           rm -f ~/.gradle/caches/modules-2/gc.properties
 
   publish:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: test
     permissions:
@@ -191,6 +194,7 @@ jobs:
 
   # This job builds and uploads CLI binaries
   cli-native-binaries:
+    timeout-minutes: 15
     name: build and upload CLI
     needs: test
     strategy:
@@ -244,6 +248,7 @@ jobs:
           rm -f ~/.gradle/caches/modules-2/gc.properties
 
   docker:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -300,8 +305,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
   docker-self-contained:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: test
     steps:
