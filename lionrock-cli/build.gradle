@@ -58,7 +58,7 @@ generateNativeImageConfig {
 }
 
 dependencies {
-    implementation('io.grpc:grpc-stub:1.48.0') {
+    implementation('io.grpc:grpc-stub:1.49.0') {
         exclude group: 'com.google.guava', module: 'guava'
         exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
