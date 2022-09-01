@@ -122,6 +122,13 @@ jobs:
           generate-branches-badge: true
           jacoco-csv-file: build/reports/jacoco/codeCoverageReport/codeCoverageReport.csv
 
+      - name: Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          fail_ci_if_error: true
+          directory: build/reports/jacoco/codeCoverageReport
+          verbose: true # optional (default = false)
+
       - name: Log coverage percentage
         run: |
           echo "coverage = ${{ steps.jacoco.outputs.coverage }}"
