@@ -23,23 +23,10 @@ jobs:
         with:
           java-version: 11
           graalvm-version: 21.2.0
-      - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-      - name: Cache Gradle packages
-        uses: actions/cache@v3.0.8
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
       - name: Build with Gradle
-        run: ./gradlew --init-script .github/init.gradle build -x test --no-daemon
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: build -x test --scan
         env:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
@@ -53,14 +40,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: lionrock-cli
-          path: 'lionrock-cli/build/libs'
-
-      - name: Cleanup Gradle Cache
-        # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
-        # Restoring these files from a GitHub Actions cache might cause problems for future builds.
-        run: |
-          rm -f ~/.gradle/caches/modules-2/modules-2.lock
-          rm -f ~/.gradle/caches/modules-2/gc.properties
+          path: 'lionrock-cli/build/libs'\
 
   test:
     timeout-minutes: 15
@@ -93,23 +73,10 @@ jobs:
           java-version: 11
           graalvm-version: 21.2.0
 
-      - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-      - name: Cache Gradle packages
-        uses: actions/cache@v3.0.8
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
       - name: Test with Gradle
-        run: ./gradlew --init-script .github/init.gradle test codeCoverageReport --no-daemon --info
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: test codeCoverageReport --scan
         env:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
@@ -161,29 +128,15 @@ jobs:
         with:
           java-version: 11
           graalvm-version: 21.2.0
-      - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-      - name: Cache Gradle packages
-        uses: actions/cache@v3.0.8
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
       - id: install-secret-key
         name: Install gpg secret key
         run: |
           cat <(echo -e "${{ secrets.OSSRH_GPG_SECRET_KEY }}") | gpg --batch --import
           gpg --list-secret-keys --keyid-format LONG
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
       - name: Publish
-        run: ./gradlew --init-script .github/init.gradle publish --no-daemon -Psigning.gnupg.passphrase=${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }} -Psigning.gnupg.executable=gpg -Psigning.gnupg.keyName=${{ secrets.OSSRH_GPG_SECRET_NAME }}
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: publish -Psigning.gnupg.passphrase=${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }} -Psigning.gnupg.executable=gpg -Psigning.gnupg.keyName=${{ secrets.OSSRH_GPG_SECRET_NAME }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
@@ -191,13 +144,6 @@ jobs:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
           BUILD_CACHE_PASSWORD: ${{ secrets.BUILD_CACHE_PASSWORD }}
-
-      - name: Cleanup Gradle Cache
-        # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
-        # Restoring these files from a GitHub Actions cache might cause problems for future builds.
-        run: |
-          rm -f ~/.gradle/caches/modules-2/modules-2.lock
-          rm -f ~/.gradle/caches/modules-2/gc.properties
 
   # This job builds and uploads CLI binaries
   cli-native-binaries:
@@ -223,16 +169,11 @@ jobs:
       - name: install native-image
         run: gu install native-image
 
-      - name: cache
-        uses: actions/cache@v3.0.8
-        with:
-          path: ~/.gradle/caches
-          key: gradle-${{ matrix.os }}-${{ hashFiles('build.gradle') }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: gradle-${{ matrix.os }}-
-
       # Builds native image
       - name: "build for ${{ matrix.os }}"
-        run: ./gradlew --init-script .github/init.gradle nativeImage --no-daemon
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: nativeImage
         env:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
@@ -246,13 +187,6 @@ jobs:
         with:
           name: lionrock-cli-${{ matrix.os }}
           path: lionrock-cli/build/bin/lionrock-cli
-
-      - name: Cleanup Gradle Cache
-        # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
-        # Restoring these files from a GitHub Actions cache might cause problems for future builds.
-        run: |
-          rm -f ~/.gradle/caches/modules-2/modules-2.lock
-          rm -f ~/.gradle/caches/modules-2/gc.properties
 
   docker:
     timeout-minutes: 15
@@ -270,23 +204,11 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-      - name: Cache Gradle packages
-        uses: actions/cache@v3.0.8
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew --init-script .github/init.gradle :lionrock-foundationdb-server:build -x test --no-daemon
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: :lionrock-foundationdb-server:build -x test
         env:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
@@ -329,23 +251,10 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-      - name: Cache Gradle packages
-        uses: actions/cache@v3.0.8
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
       - name: Build with Gradle
-        run: ./gradlew --init-script .github/init.gradle :lionrock-foundationdb-server:build -x test --no-daemon
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: :lionrock-foundationdb-server:build -x test
         env:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}

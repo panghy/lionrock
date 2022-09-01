@@ -34,28 +34,15 @@ jobs:
       - name: remove fdb-server
         run: rm foundationdb-server_6.3.23-1_amd64.deb
 
-      - uses: ayltai/setup-graalvm@v1
+      - uses: actions/setup-java@v3
         with:
-          java-version: 11
-          graalvm-version: 21.2.0
-
-      - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@e6e38bacfdf1a337459f332974bb2327a31aaf4b
-      - name: Cache Gradle packages
-        uses: actions/cache@v3.0.8
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+          java-version: '11'
+          distribution: 'temurin'
 
       - name: Test with Gradle
-        run: ./gradlew test codeCoverageReport --no-daemon --info
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: test codeCoverageReport --info --scan
 
       - name: Generate JaCoCo Badge
         id: jacoco
