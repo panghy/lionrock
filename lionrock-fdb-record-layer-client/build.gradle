@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
     id 'jacoco'
     id 'signing'
-    id 'org.springframework.boot' version '2.7.2'
+    id 'org.springframework.boot' version '2.7.3'
     id 'io.spring.dependency-management' version '1.0.13.RELEASE'
     id "com.google.protobuf" version "0.8.19"
 }
@@ -24,7 +24,7 @@ dependencies {
     implementation project(':lionrock-proto-java')
     implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.1.256.0'
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
-    implementation "org.foundationdb:fdb-java:6.3.24"
+    implementation "org.foundationdb:fdb-java:7.1.21"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
 
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
@@ -108,6 +108,6 @@ signing {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.21.1'
+        artifact = 'com.google.protobuf:protoc:3.21.5'
     }
 }

@@ -9,7 +9,7 @@ plugins {
     id 'maven-publish'
     id 'jacoco'
     id 'signing'
-    id 'org.springframework.boot' version '2.7.2'
+    id 'org.springframework.boot' version '2.7.3'
     id 'io.spring.dependency-management' version '1.0.13.RELEASE'
 }
 
@@ -30,7 +30,7 @@ repositories {
 
 dependencies {
     implementation project(':lionrock-proto-java')
-    implementation 'org.foundationdb:fdb-java:6.3.24'
+    implementation 'org.foundationdb:fdb-java:7.1.21'
     implementation "io.grpc:grpc-stub:${grpcVersion}"
     implementation "io.grpc:grpc-api:${grpcVersion}"
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
