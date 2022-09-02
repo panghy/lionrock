@@ -93,8 +93,7 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           fail_ci_if_error: true
-          directory: build/reports/jacoco/codeCoverageReport
-          verbose: true # optional (default = false)
+          file: ./build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml
 
       - name: Log coverage percentage
         run: |

@@ -55,7 +55,6 @@ jobs:
         with:
           fail_ci_if_error: true
           file: ./build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml
-          verbose: true # optional (default = false)
 
       - name: Log coverage percentage
         run: |
