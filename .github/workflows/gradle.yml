@@ -177,7 +177,7 @@ jobs:
 
       # Builds native image
       - name: "build for ${{ matrix.os }}"
-        run: ./gradlew --init-script .github/init.gradle nativeImage --no-daemon
+        run: ./gradlew nativeImage --no-daemon
         env:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
