@@ -42,6 +42,8 @@ nativeImage {
 
         add '--initialize-at-build-time=ch.qos.logback.classic.Logger'
         add '--initialize-at-build-time=ch.qos.logback.classic.Level'
+        add '--initialize-at-build-time=ch.qos.logback.core.util.Loader'
+        add '--initialize-at-build-time=ch.qos.logback.core.util.StatusPrinter'
         add '--initialize-at-build-time=ch.qos.logback.core.status.InfoStatus'
         add '--initialize-at-build-time=ch.qos.logback.core.spi.AppenderAttachableImpl'
         add '--initialize-at-build-time=ch.qos.logback.core.status.StatusBase'
