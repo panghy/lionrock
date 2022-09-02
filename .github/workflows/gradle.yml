@@ -168,11 +168,16 @@ jobs:
       - name: install native-image
         run: gu install native-image
 
+      - name: cache
+        uses: actions/cache@v3.0.8
+        with:
+          path: ~/.gradle/caches
+          key: gradle-${{ matrix.os }}-${{ hashFiles('build.gradle') }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ matrix.os }}-
+
       # Builds native image
       - name: "build for ${{ matrix.os }}"
-        uses: gradle/gradle-build-action@v2
-        with:
-          arguments: nativeImage
+        run: ./gradlew --init-script .github/init.gradle nativeImage --no-daemon
         env:
           BUILD_CACHE_ADDR: ${{ secrets.BUILD_CACHE_ADDR }}
           BUILD_CACHE_USERNAME: ${{ secrets.BUILD_CACHE_USERNAME }}
@@ -186,6 +191,13 @@ jobs:
         with:
           name: lionrock-cli-${{ matrix.os }}
           path: lionrock-cli/build/bin/lionrock-cli
+
+      - name: Cleanup Gradle Cache
+        # Remove some files from the Gradle cache, so they aren't cached by GitHub Actions.
+        # Restoring these files from a GitHub Actions cache might cause problems for future builds.
+        run: |
+          rm -f ~/.gradle/caches/modules-2/modules-2.lock
+          rm -f ~/.gradle/caches/modules-2/gc.properties
 
   docker:
     timeout-minutes: 15
