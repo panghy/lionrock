@@ -24,7 +24,7 @@ dependencies {
     implementation project(':lionrock-proto-java')
     implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.1.256.0'
     implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
-    implementation "org.foundationdb:fdb-java:6.3.24"
+    implementation "org.foundationdb:fdb-java:7.1.23"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
 
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
