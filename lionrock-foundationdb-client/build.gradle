@@ -37,7 +37,7 @@ dependencies {
     implementation 'com.google.guava:guava:31.1-jre'
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.7.0'
-    testImplementation 'net.bytebuddy:byte-buddy:1.12.14'
+    testImplementation 'net.bytebuddy:byte-buddy:1.12.17'
     testImplementation 'org.mockito:mockito-junit-jupiter:4.7.0'
 
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
