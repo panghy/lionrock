@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'jacoco'
     // https://github.com/researchgate/gradle-release/issues/363
-    id 'net.researchgate.release' version '2.6.0'
+    id 'net.researchgate.release' version '3.0.2'
 }
 
 allprojects {
