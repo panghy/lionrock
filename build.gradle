@@ -50,7 +50,7 @@ subprojects {
 release {
     tagTemplate = 'v${version}'
     git {
-        requireBranch = 'master'
+        requireBranch.set('master')
     }
 }
 
