@@ -27,7 +27,7 @@ dependencies {
     testFixturesImplementation "com.google.protobuf:protobuf-java:${protobufVersion}"
     testFixturesImplementation "io.grpc:grpc-api:${grpcVersion}"
     testFixturesImplementation "io.grpc:grpc-stub:${grpcVersion}"
-    testFixturesImplementation('net.devh:grpc-spring-boot-starter:2.13.1.RELEASE')
+    testFixturesImplementation('net.devh:grpc-spring-boot-starter:2.14.0.RELEASE')
 
     testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-actuator'
