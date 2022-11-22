@@ -126,7 +126,7 @@ public class RemoteDatabase implements DatabaseMixin {
       public void setRetryLimit(long limit) {
         this.maxAttempts = limit;
       }
-    }, -1);
+    }, 60_000);
   }
 
   @Override
