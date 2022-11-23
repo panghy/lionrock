@@ -580,7 +580,11 @@ public class RemoteTransaction implements TransactionMixin {
       versionStampFuture.completeExceptionally(NO_COMMIT_VERSION);
       // wait until all outstanding futures complete before closing the connection to the server.
       CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).
-          whenComplete((unused, throwable) -> requestSink.onCompleted());
+          whenComplete((unused, throwable) -> {
+            synchronized (requestSink) {
+              requestSink.onCompleted();
+            }
+          });
     }
   }
 
