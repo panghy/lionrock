@@ -6,6 +6,7 @@ import com.apple.foundationdb.MutationType;
 import com.apple.foundationdb.StreamingMode;
 import com.apple.foundationdb.*;
 import com.apple.foundationdb.async.AsyncIterable;
+import com.google.common.base.Joiner;
 import com.google.common.base.Throwables;
 import com.google.protobuf.ByteString;
 import io.github.panghy.lionrock.client.foundationdb.impl.collections.GrpcAsyncIterable;
@@ -24,6 +25,8 @@ import java.util.Collection;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.apple.foundationdb.tuple.ByteArrayUtil.printable;
 import static java.util.concurrent.CompletableFuture.failedFuture;
@@ -34,6 +37,8 @@ import static java.util.concurrent.CompletableFuture.failedFuture;
  * @author Clement Pang
  */
 public class RemoteTransaction implements TransactionMixin {
+
+  private static final Logger logger = Logger.getLogger(RemoteTransaction.class.getCanonicalName());
 
   /**
    * Flush mutations when we have 1MB of them.
@@ -153,10 +158,14 @@ public class RemoteTransaction implements TransactionMixin {
         public void onError(Throwable t) {
           // if the server error-ed out, fail all outstanding future.
           Throwable unwrapped = unwrapFdbException(t);
+          String message = "onError from server, commitFuture: " + (commitFuture);
           synchronized (futures) {
             remoteError = unwrapped;
             futures.forEach(x -> x.completeExceptionally(unwrapped));
+            message += "\n" + futures.size() + " futures\n";
+            message += Joiner.on("\n").join(futures);
           }
+          logger.log(Level.WARNING, message, t);
           commitFuture.completeExceptionally(unwrapped);
           synchronized (requestSink) {
             try {
