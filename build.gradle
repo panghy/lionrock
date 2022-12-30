@@ -49,6 +49,7 @@ subprojects {
 
 release {
     tagTemplate = 'v${version}'
+    preTagCommitMessage = '[skip ci] [Gradle Release Plugin] - pre tag commit:'
     git {
         requireBranch.set('master')
     }
