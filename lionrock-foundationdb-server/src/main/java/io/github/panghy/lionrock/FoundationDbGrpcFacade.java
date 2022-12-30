@@ -1529,6 +1529,12 @@ public class FoundationDbGrpcFacade extends TransactionalKeyValueStoreGrpc.Trans
         populateOverallSpanStats();
         longLivingFutures.forEach(x -> x.cancel(false));
         closeAndDiscardTx();
+        synchronized (responseObserver) {
+          try {
+            responseObserver.onCompleted();
+          } catch (RuntimeException ignored) {
+          }
+        }
       }
 
       private void throwIfSequenceIdHasBeenSeen(long sequenceId) {
