@@ -6,8 +6,6 @@ name: Gradle Build
 on:
   push:
     branches: [ master ]
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:
