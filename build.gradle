@@ -17,7 +17,7 @@ allprojects {
         set('springCloudVersion', "2021.0.5")
         set('wavefrontVersion', "3.0.1")
         set('grpcVersion', "1.53.0")
-        set('protobufVersion', "3.22.1")
+        set('protobufVersion', "3.21.12")
         set('guavaVersion', '31.1-jre')
     }
 }
