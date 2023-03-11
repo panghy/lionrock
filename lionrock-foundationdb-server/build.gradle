@@ -1,6 +1,6 @@
 plugins {
     id 'org.springframework.boot' version '2.7.3'
-    id 'io.spring.dependency-management' version '1.1.0'
+    id 'io.spring.dependency-management'
     id 'java'
     id 'maven-publish'
     id 'jacoco'
@@ -39,17 +39,17 @@ dependencies {
     implementation 'io.zipkin.brave:brave-instrumentation-grpc'
     implementation 'org.foundationdb:fdb-java:6.3.24'
 
-    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    implementation "com.google.protobuf:protobuf-java"
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
 
     implementation 'com.wavefront:wavefront-spring-boot-starter'
 
     implementation 'net.devh:grpc-spring-boot-starter:2.14.0.RELEASE'
-    implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    implementation "io.grpc:grpc-netty-shaded"
 
     testImplementation project(':lionrock-foundationdb-client')
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
-    testImplementation "io.grpc:grpc-testing:${grpcVersion}"
+    testImplementation "io.grpc:grpc-testing"
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testImplementation 'org.junit.platform:junit-platform-suite'
@@ -64,6 +64,9 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        mavenBom "com.google.guava:guava-bom:${guavaVersion}"
+        mavenBom "io.grpc:grpc-bom:${grpcVersion}"
+        mavenBom "com.google.protobuf:protobuf-bom:${protobufVersion}"
         mavenBom "com.wavefront:wavefront-spring-boot-bom:${wavefrontVersion}"
     }
 }

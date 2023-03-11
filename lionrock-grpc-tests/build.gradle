@@ -24,10 +24,10 @@ dependencies {
     testFixturesImplementation project(':lionrock-proto-java')
     testFixturesImplementation project(':lionrock-foundationdb-client')
     testFixturesImplementation project(":lionrock-grpc-tests")
-    testFixturesImplementation "com.google.protobuf:protobuf-java:${protobufVersion}"
-    testFixturesImplementation "io.grpc:grpc-api:${grpcVersion}"
-    testFixturesImplementation "io.grpc:grpc-stub:${grpcVersion}"
-    testFixturesImplementation('net.devh:grpc-spring-boot-starter:2.14.0.RELEASE')
+    testFixturesImplementation "com.google.protobuf:protobuf-java"
+    testFixturesImplementation "io.grpc:grpc-api"
+    testFixturesImplementation "io.grpc:grpc-stub"
+    testFixturesImplementation 'net.devh:grpc-spring-boot-starter:2.14.0.RELEASE'
 
     testFixturesImplementation 'org.springframework.cloud:spring-cloud-starter-sleuth'
     testFixturesImplementation 'org.springframework.boot:spring-boot-starter-actuator'

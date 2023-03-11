@@ -3,6 +3,7 @@ plugins {
     id 'jacoco'
     // https://github.com/researchgate/gradle-release/issues/363
     id 'net.researchgate.release' version '3.0.2'
+    id 'io.spring.dependency-management' version '1.1.0'
 }
 
 allprojects {
@@ -13,37 +14,17 @@ allprojects {
     }
 
     ext {
-        set('springCloudVersion', "2021.0.3")
-        set('wavefrontVersion', "2.2.2")
-        set('grpcVersion', "1.49.0")
-        set('protobufVersion', "3.21.1")
+        set('springCloudVersion', "2021.0.5")
+        set('wavefrontVersion', "3.0.1")
+        set('grpcVersion', "1.53.0")
+        set('protobufVersion', "3.22.1")
+        set('guavaVersion', '31.1-jre')
     }
 }
 
 subprojects {
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
-    }
-
-    configurations.all {
-        resolutionStrategy {
-            // fail eagerly on version conflict (includes transitive dependencies)
-            // e.g. multiple different versions of the same dependency (group and name are equal)
-            failOnVersionConflict()
-            eachDependency { details ->
-                if ("io.grpc".equalsIgnoreCase(details.requested.group)) {
-                    details.useVersion "${grpcVersion}"
-                }
-                if ("com.google.guava".equalsIgnoreCase(details.requested.group) &&
-                        "guava".equalsIgnoreCase(details.requested.name)) {
-                    details.useVersion "31.1-jre"
-                }
-                if ("com.google.errorprone".equalsIgnoreCase(details.requested.group) &&
-                        "error_prone_annotations".equalsIgnoreCase(details.requested.name)) {
-                    details.useVersion "2.14.0"
-                }
-            }
-        }
     }
 }
 
