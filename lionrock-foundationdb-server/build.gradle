@@ -37,7 +37,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'io.zipkin.brave:brave-instrumentation-grpc'
-    implementation 'org.foundationdb:fdb-java:6.3.24'
+    implementation 'org.foundationdb:fdb-java:7.2.5'
 
     implementation "com.google.protobuf:protobuf-java"
     implementation 'com.google.code.findbugs:jsr305:3.0.2'
