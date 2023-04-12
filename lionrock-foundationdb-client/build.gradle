@@ -38,7 +38,7 @@ dependencies {
 
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.9.0'
     testImplementation 'net.bytebuddy:byte-buddy:1.12.20'
-    testImplementation 'org.mockito:mockito-junit-jupiter:4.7.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.3.0'
 
     testImplementation(testFixtures(project(":lionrock-grpc-tests")))
     testImplementation project(path: ':lionrock-foundationdb-server', configuration: 'plain')
