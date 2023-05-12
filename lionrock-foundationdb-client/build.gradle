@@ -9,7 +9,7 @@ plugins {
     id 'maven-publish'
     id 'jacoco'
     id 'signing'
-    id 'org.springframework.boot' version '2.7.3'
+    id 'org.springframework.boot' version '2.7.11'
     id 'io.spring.dependency-management'
 }
 
@@ -53,10 +53,10 @@ dependencies {
 
 dependencyManagement {
     imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-        mavenBom "com.google.guava:guava-bom:${guavaVersion}"
-        mavenBom "io.grpc:grpc-bom:${grpcVersion}"
-        mavenBom "com.google.protobuf:protobuf-bom:${protobufVersion}"
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2021.0.7"
+        mavenBom "com.google.guava:guava-bom:31.1-jre"
+        mavenBom "io.grpc:grpc-bom:1.55.1"
+        mavenBom "com.google.protobuf:protobuf-bom:3.23.0"
     }
 }
 
