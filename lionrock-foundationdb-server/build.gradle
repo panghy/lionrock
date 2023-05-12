@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version '2.7.3'
+    id 'org.springframework.boot' version '2.7.11'
     id 'io.spring.dependency-management'
     id 'java'
     id 'maven-publish'
@@ -63,11 +63,11 @@ dependencies {
 
 dependencyManagement {
     imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-        mavenBom "com.google.guava:guava-bom:${guavaVersion}"
-        mavenBom "io.grpc:grpc-bom:${grpcVersion}"
-        mavenBom "com.google.protobuf:protobuf-bom:${protobufVersion}"
-        mavenBom "com.wavefront:wavefront-spring-boot-bom:${wavefrontVersion}"
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2021.0.7"
+        mavenBom "com.google.guava:guava-bom:31.1-jre"
+        mavenBom "io.grpc:grpc-bom:1.55.1"
+        mavenBom "com.google.protobuf:protobuf-bom:3.23.0"
+        mavenBom "com.wavefront:wavefront-spring-boot-bom:2.3.4"
     }
 }
 
