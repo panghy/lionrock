@@ -22,7 +22,7 @@ bootJar {
 dependencies {
     implementation project(':lionrock-foundationdb-client')
     implementation project(':lionrock-proto-java')
-    implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.1.256.0'
+    implementation 'org.foundationdb:fdb-record-layer-core-pb3:3.3.373.0'
     implementation "com.google.protobuf:protobuf-java"
     implementation "org.foundationdb:fdb-java:6.3.24"
     implementation "io.grpc:grpc-stub"
