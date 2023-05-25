@@ -68,7 +68,7 @@ dependencies {
     implementation project(':lionrock-proto-java')
 
     implementation 'com.google.guava:guava'
-    implementation 'org.foundationdb:fdb-java:6.3.24'
+    implementation 'org.foundationdb:fdb-java:7.3.1'
     implementation 'info.picocli:picocli-shell-jline3:4.6.3'
     implementation 'org.jline:jline-terminal-jansi:3.21.0'
     implementation 'org.fusesource.jansi:jansi:2.4.0'
