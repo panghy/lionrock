@@ -30,7 +30,7 @@ repositories {
 
 dependencies {
     implementation project(':lionrock-proto-java')
-    implementation 'org.foundationdb:fdb-java:6.3.24'
+    implementation 'org.foundationdb:fdb-java:7.3.3'
     implementation "io.grpc:grpc-stub"
     implementation "io.grpc:grpc-api"
     implementation "com.google.protobuf:protobuf-java"
