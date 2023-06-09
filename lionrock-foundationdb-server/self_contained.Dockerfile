@@ -1,4 +1,4 @@
-ARG FDB_VERSION=6.3.24
+ARG FDB_VERSION=7.1.31
 
 FROM clementpang/foundationdb_binaries:${FDB_VERSION} as built_fdb
 

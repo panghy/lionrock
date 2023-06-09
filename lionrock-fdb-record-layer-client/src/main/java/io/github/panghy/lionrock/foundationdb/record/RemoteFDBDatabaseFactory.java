@@ -1,10 +1,7 @@
 package io.github.panghy.lionrock.foundationdb.record;
 
 import com.apple.foundationdb.Database;
-import com.apple.foundationdb.record.provider.foundationdb.FDBDatabase;
-import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory;
-import com.apple.foundationdb.record.provider.foundationdb.FDBLocalityProvider;
-import com.apple.foundationdb.record.provider.foundationdb.FDBTraceFormat;
+import com.apple.foundationdb.record.provider.foundationdb.*;
 import io.github.panghy.lionrock.client.foundationdb.RemoteFoundationDBDatabaseFactory;
 import io.github.panghy.lionrock.proto.TransactionalKeyValueStoreGrpc;
 import io.grpc.ManagedChannel;
@@ -89,6 +86,18 @@ public class RemoteFDBDatabaseFactory extends FDBDatabaseFactory {
   @Override
   public Supplier<Boolean> getTransactionIsTracedSupplier() {
     return transactionIsTracedSupplier;
+  }
+
+  @Override
+  public void setAPIVersion(@Nonnull APIVersion apiVersion) {
+    if (apiVersion != APIVersion.API_VERSION_6_3) {
+      throw new IllegalArgumentException("Only API version 6.3 is supported");
+    }
+  }
+
+  @Override
+  public APIVersion getAPIVersion() {
+    return APIVersion.API_VERSION_6_3;
   }
 
   @Override

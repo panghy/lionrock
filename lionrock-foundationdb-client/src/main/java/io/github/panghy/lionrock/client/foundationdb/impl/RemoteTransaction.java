@@ -272,6 +272,11 @@ public class RemoteTransaction implements TransactionMixin {
     }
 
     @Override
+    public AsyncIterable<MappedKeyValue> getMappedRange(KeySelector begin, KeySelector end, byte[] mapper, int limit, boolean reverse, StreamingMode mode) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
     public CompletableFuture<Long> getEstimatedRangeSizeBytes(byte[] begin, byte[] end) {
       return RemoteTransaction.this.getEstimatedRangeSizeBytes(begin, end);
     }
@@ -279,6 +284,16 @@ public class RemoteTransaction implements TransactionMixin {
     @Override
     public CompletableFuture<Long> getEstimatedRangeSizeBytes(Range range) {
       return RemoteTransaction.this.getEstimatedRangeSizeBytes(range);
+    }
+
+    @Override
+    public CompletableFuture<KeyArrayResult> getRangeSplitPoints(byte[] begin, byte[] end, long chunkSize) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<KeyArrayResult> getRangeSplitPoints(Range range, long chunkSize) {
+      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -695,7 +710,7 @@ public class RemoteTransaction implements TransactionMixin {
               setSnapshot(snapshot).
               setSequenceId(curr).
               build()).
-          build());
+              build());
     }
     return toReturn;
   }
@@ -706,11 +721,17 @@ public class RemoteTransaction implements TransactionMixin {
     return getRange(begin, end, limit, reverse, mode, false);
   }
 
+  @Override
+  public AsyncIterable<MappedKeyValue> getMappedRange(KeySelector begin, KeySelector end, byte[] mapper,
+                                                      int limit, boolean reverse, StreamingMode mode) {
+    throw new UnsupportedOperationException();
+  }
+
   private AsyncIterable<KeyValue> getRange(KeySelector begin, KeySelector end, int limit, boolean reverse,
                                            StreamingMode mode, boolean snapshot) {
     batcher.flush(true);
     io.github.panghy.lionrock.proto.StreamingMode streamingMode =
-        io.github.panghy.lionrock.proto.StreamingMode.ITERATOR;
+            io.github.panghy.lionrock.proto.StreamingMode.ITERATOR;
     switch (mode) {
       case WANT_ALL:
         streamingMode = io.github.panghy.lionrock.proto.StreamingMode.WANT_ALL;
@@ -780,8 +801,8 @@ public class RemoteTransaction implements TransactionMixin {
               setSequenceId(curr).
               setStart(ByteString.copyFrom(begin)).
               setEnd(ByteString.copyFrom(end)).
-              build()).
-          build());
+                  build()).
+              build());
     }
     return toReturn;
   }
@@ -789,6 +810,16 @@ public class RemoteTransaction implements TransactionMixin {
   @Override
   public CompletableFuture<Long> getEstimatedRangeSizeBytes(Range range) {
     return getEstimatedRangeSizeBytes(range.begin, range.end);
+  }
+
+  @Override
+  public CompletableFuture<KeyArrayResult> getRangeSplitPoints(byte[] begin, byte[] end, long chunkSize) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public CompletableFuture<KeyArrayResult> getRangeSplitPoints(Range range, long chunkSize) {
+    throw new UnsupportedOperationException();
   }
 
   @Override
