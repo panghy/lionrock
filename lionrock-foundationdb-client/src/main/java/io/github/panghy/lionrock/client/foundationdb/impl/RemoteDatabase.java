@@ -1,9 +1,7 @@
 package io.github.panghy.lionrock.client.foundationdb.impl;
 
-import com.apple.foundationdb.Database;
-import com.apple.foundationdb.DatabaseOptions;
-import com.apple.foundationdb.EventKeeper;
-import com.apple.foundationdb.Transaction;
+import com.apple.foundationdb.*;
+import com.apple.foundationdb.tuple.Tuple;
 import io.github.panghy.lionrock.client.foundationdb.mixins.DatabaseMixin;
 import io.github.panghy.lionrock.proto.TransactionalKeyValueStoreGrpc;
 
@@ -130,6 +128,31 @@ public class RemoteDatabase implements DatabaseMixin {
   }
 
   @Override
+  public Tenant openTenant(Tuple tenantName) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Tenant openTenant(byte[] tenantName, Executor e) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Tenant openTenant(Tuple tenantName, Executor e) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Tenant openTenant(byte[] tenantName, Executor e, EventKeeper eventKeeper) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Tenant openTenant(Tuple tenantName, Executor e, EventKeeper eventKeeper) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public Transaction createTransaction(Executor e) {
     return createTransaction("unnamed_transaction", e);
   }
@@ -145,6 +168,11 @@ public class RemoteDatabase implements DatabaseMixin {
   @Override
   public DatabaseOptions options() {
     return databaseOptions;
+  }
+
+  @Override
+  public double getMainThreadBusyness() {
+    return 0;
   }
 
   public <T> T run(String name, Function<? super Transaction, T> retryable, Executor e) {

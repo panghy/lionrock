@@ -1,4 +1,4 @@
-ARG FDB_VERSION=6.3.24
+ARG FDB_VERSION=7.1.31
 
 FROM clementpang/foundationdb_build:latest as scratch
 ARG FDB_VERSION
